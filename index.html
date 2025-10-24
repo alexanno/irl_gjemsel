@@ -3,13 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-   const STATE={IDLE:'idle', COUNTDOWN:'countdown', RUNNING:'running', CAUGHT:'caught'};
-  const Game={
-    state:STATE.IDLE, tickMs:50, hideSeconds:20, timer:null, watcher:null,
-    startedAt:null, stopwatchTimer:null, shrunk:false, shrinkTimeSec:120
-  };
-
-  // Geometri>IRL Spøkelsesspill – Hindringer + Sonekrymp</title>
+<title>IRL Spøkelsesspill - Hindringer + Sonekrymp</title>
 
   <!-- Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -95,7 +89,7 @@
 
     <div class="row">
       <label for="prox" title="Fanges innenfor denne avstanden, uansett syn">Nærhet(m):</label>
-      <input id="prox" type="number" value="1" min="1" max="30" step="1" style="width:80px"/>
+      <input id="prox" type="number" value="0" min="1" max="30" step="1" style="width:80px"/>
     </div>
 
     <div class="row" style="flex-direction: column; align-items: stretch;">
@@ -152,7 +146,7 @@
   const STATE={IDLE:'idle', COUNTDOWN:'countdown', RUNNING:'running', CAUGHT:'caught'};
   const Game={
     state:STATE.IDLE, tickMs:100, hideSeconds:3, timer:null, watcher:null,
-    startedAt:null, stopwatchTimer:null, shrunk:false, shrinkTimeSec:10
+    startedAt:null, stopwatchTimer:null, shrunk:false, shrinkTimeSec:20
   };
 
   // Geometri
@@ -461,37 +455,62 @@
       this.speed=opts.speed||4.2;
       this.fov=opts.fov||95;
       this.viewDist=opts.viewDist||70;
-      this.proximity=opts.proximity||1;
+      this.proximity=opts.proximity||0;
       this.mode='patrol';
       this.lastSeenTarget=null;
       this.marker=L.circleMarker(ll,{radius:6,weight:2,color:'#222',fillColor:'#f66',fillOpacity:.9}).addTo(map);
       this.cone=L.polygon(this.computeCone(),{weight:1,color:'#c44',fillColor:'#fcc',fillOpacity:.15}).addTo(map);
     }
     computeCone(){
-      const a=this.heading - this.fov/2, b=this.heading + this.fov/2;
-      const apex=this.latlng, p1=moveFrom(apex,a,this.viewDist), p2=moveFrom(apex,b,this.viewDist);
-      return [apex,p1,p2];
+      // Normalize heading to [0, 360)
+      const normalizedHeading = ((this.heading % 360) + 360) % 360;
+      
+      // Calculate the exact angles for the cone edges
+      const leftAngle = normalizedHeading - this.fov/2;
+      const rightAngle = normalizedHeading + this.fov/2;
+      
+      // Create cone points with multiple segments for smoother edges
+      const points = [this.latlng];
+      const segments = 8; // Number of segments for the arc
+      
+      for (let i = 0; i <= segments; i++) {
+        const angle = leftAngle + (rightAngle - leftAngle) * (i / segments);
+        points.push(moveFrom(this.latlng, angle, this.viewDist));
+      }
+      
+      return points;
     }
     seesPlayer(playerLL){
       if (!playerLL) return false;
       
-      // Quick proximity check first (cheapest operation)
-      const d = metersBetween(this.latlng, playerLL);
-      if (d <= this.proximity) return true;
-      if (d > this.viewDist) return false;
-
-      // Cache the bearing calculation for both FOV and line checks
-      const br = bearingTo(this.latlng, playerLL);
+      // 1. Proximity check - immediate catch if very close
+      const distance = metersBetween(this.latlng, playerLL);
+      if (distance <= this.proximity) return true;
       
-      // Check if player is within FOV (cheap angle math)
-      const delta = ((br - this.heading + 540) % 360) - 180;
-      if (Math.abs(delta) > this.fov/2) return false;
+      // 2. Distance check - too far to see
+      if (distance > this.viewDist) return false;
       
-      // Only do expensive line checks if player is in range and in FOV
-      // Check obstacles first as they're usually smaller than boundary
+      // 3. Field of view check - is player in view cone
+      const bearing = bearingTo(this.latlng, playerLL);
+      // Normalize both angles to [0, 360) range first
+      const normalizedHeading = ((this.heading % 360) + 360) % 360;
+      const normalizedBearing = ((bearing % 360) + 360) % 360;
+      
+      // Calculate the smallest angle between the two directions
+      let angleDiff = Math.abs(normalizedBearing - normalizedHeading);
+      if (angleDiff > 180) {
+          angleDiff = 360 - angleDiff;
+      }
+      
+      // Strict FOV check
+      const halfFOV = this.fov / 2;
+      if (angleDiff > halfFOV) return false;
+      
+      // 4. Line of sight check - no obstacles in the way
+      // Do the line check only if we passed the angle check
       if (lineIntersectsAnyObstacle(this.latlng, playerLL)) return false;
       
-      // Boundary line check last (most expensive for complex polygons)
+      // 5. Boundary check - line of sight within boundary
       if (boundaryPoly && !lineWithin(boundaryPoly, this.latlng, playerLL)) return false;
       
       return true;
@@ -628,7 +647,7 @@
     const speed=Number(inputSpeed.value||1.2);
     const fov=Number(inputFov.value||95);
     const viewDist=Number(inputViewDist.value||70);
-    const prox=Number(inputProx.value||8);
+    const prox=Number(inputProx.value||0);
 
     const bb=turf.bbox(boundaryPoly);
     let created=0, safety=0;
