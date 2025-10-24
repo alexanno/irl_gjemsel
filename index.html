@@ -179,9 +179,19 @@
   };
   const lineIntersectsAnyObstacle=(a,b)=>{
     if (!obstaclesPolys.length) return false;
-    const seg=turf.lineString([[a.lng,a.lat],[b.lng,b.lat]]);
+    // Create a short buffer around the line to ensure reliable intersection detection
+    const line = turf.lineString([[a.lng,a.lat], [b.lng,b.lat]]);
+    const bufferedLine = turf.buffer(line, 0.001, {units: 'kilometers'}); // 1m buffer
     for (const poly of obstaclesPolys) {
-      try { if (turf.booleanIntersects(seg, poly)) return true; } catch(e){}
+      try {
+        // Check if the buffered line intersects the obstacle
+        if (turf.booleanIntersects(bufferedLine, poly)) {
+          return true;
+        }
+      } catch(e){
+        // If there's an error, assume there is an intersection to be safe
+        return true;
+      }
     }
     return false;
   };
@@ -637,8 +647,15 @@
 
   function startGame(){
     if (!playerLatLng){ alert('Sett spillerposisjon (GPS eller trykk i kartet).'); return; }
-    if (!boundaryPoly) ensureDefaultBoundary(playerLatLng); // 500 m sirkel
-    if (!obstaclesPolys.length) generateRandomObstacles(6);
+    if (!boundaryPoly) {
+      ensureDefaultBoundary(playerLatLng); // 500 m sirkel
+      // Ensure boundary is set before generating obstacles
+      if (boundaryPoly && !obstaclesPolys.length) {
+        generateRandomObstacles(6);
+      }
+    } else if (!obstaclesPolys.length) {
+      generateRandomObstacles(6);
+    }
 
     clearGhosts();
     caughtEl.style.display='none';
