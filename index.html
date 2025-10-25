@@ -16,6 +16,7 @@
 
   <style>
     html, body, #map { height: 100%; margin: 0; }
+    .hidden { display: none !important; }
     #hud {
       position: absolute; top: 10px; left: 10px; z-index: 1000;
       background: rgba(255,255,255,0.94); padding: 10px 12px; border-radius: 12px;
@@ -23,7 +24,8 @@
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       transition: max-height .2s ease, opacity .2s ease;
     }
-    #hud.min { max-height: 44px; overflow: hidden; opacity: .92; }
+    #hud.min .row:not(:first-child) { display: none; }
+    #hud.min { opacity: .92; }
     #hud h1 { margin: 0 0 6px; font-size: 16px; display: inline-block; }
     #toggleHud {
       float: right; border: none; background: #eee; border-radius: 10px; padding: 6px 8px;
@@ -36,17 +38,43 @@
     #hud button.secondary { background: #777; }
     #hud button:disabled { opacity: .6; cursor: not-allowed; }
     #status { margin-top: 6px; font-size: 13px; }
-    #countdown, #stopwatch {
-      position: absolute; left: 50%; transform: translateX(-50%);
-      background: rgba(0,0,0,0.70); color: #fff; padding: 8px 12px; border-radius: 12px;
-      font-size: 16px; z-index: 1200; display: none; text-align: center;
+    #countdown {
+      position: absolute; left: 50%; bottom: 80px;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.75); color: #fff; 
+      padding: 12px 24px; border-radius: 12px;
+      font-size: 24px; z-index: 1200; display: none; 
+      text-align: center; font-weight: 600;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2);
     }
-    #countdown { top: 50%; font-size: 24px; padding: 18px 22px; border-radius: 16px; }
-    #stopwatch { top: 10px; }
+    #stopwatch {
+      position: absolute; left: 50%; bottom: 20px;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.75); color: #fff; 
+      padding: 8px 16px; border-radius: 12px;
+      font-size: 18px; z-index: 1200; display: none; 
+      text-align: center; font-weight: 600;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    }
+    #overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.7); z-index: 1100;
+      display: none; cursor: pointer;
+    }
     #caught {
-      position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%);
-      background: rgba(200,0,0,0.9); color: #fff; padding: 12px 16px; border-radius: 12px;
-      font-size: 18px; z-index: 1200; display: none; font-weight: 700;
+      position: absolute; top: 50%; left: 50%; 
+      transform: translate(-50%, -50%);
+      background: linear-gradient(to right, rgb(200,0,0), rgb(180,0,0));
+      color: #fff; padding: 24px 48px; border-radius: 16px;
+      font-size: 32px; z-index: 1200; display: none; 
+      font-weight: 800; text-align: center;
+      box-shadow: 0 4px 32px rgba(0,0,0,0.5);
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    #caught:hover {
+      transform: translate(-50%, -50%) scale(1.02);
+      box-shadow: 0 6px 40px rgba(0,0,0,0.6);
     }
     .legend {
       position: absolute; right: 10px; bottom: 10px; z-index: 1000;
@@ -63,7 +91,7 @@
 </head>
 <body>
   <div id="map"></div>
-
+  <div id="overlay"></div>
   <div id="hud">
     <h1>IRL Spøkelsesspill 👻</h1>
     <button id="toggleHud" title="Minimer/utvid">−</button>
@@ -87,12 +115,12 @@
       <input id="viewDist" type="number" value="70" min="10" max="200" step="5" style="width:80px"/>
     </div>
 
-    <div class="row">
+    <div class="row hidden">
       <label for="prox" title="Fanges innenfor denne avstanden, uansett syn">Nærhet(m):</label>
       <input id="prox" type="number" value="0" min="1" max="30" step="1" style="width:80px"/>
     </div>
 
-    <div class="row" style="flex-direction: column; align-items: stretch;">
+    <div class="row hidden" style="flex-direction: column; align-items: stretch;">
       <label><b>Last GeoJSON-avgrensning (valgfritt)</b></label>
       <input id="geojsonBoundary" type="file" accept=".geojson,.json,application/geo+json"/>
       <div class="hint">Polygon/multipolygon som omkranser spilleområdet. Uten fil: sirkel 500 m.</div>
@@ -616,16 +644,21 @@
     countdownEl.style.display='block';
     let count=1, elapsed=0;
     countdownEl.textContent=`${count}`;
-    const timer=setInterval(()=>{
-      elapsed+=2; count++;
-      if (elapsed>=Game.hideSeconds){
+    const startTime = Date.now();
+    const countdownUpdate = () => {
+      const elapsedSec = Math.floor((Date.now() - startTime) / 1000);
+      const remaining = Game.hideSeconds - elapsedSec;
+      
+      if (remaining <= 0) {
         clearInterval(timer);
-        countdownEl.style.display='none';
+        countdownEl.style.display = 'none';
         runLoop();
       } else {
-        countdownEl.textContent=`${count}`;
+        countdownEl.textContent = remaining;
       }
-    },2000);
+    };
+    countdownUpdate(); // Show initial number
+    const timer = setInterval(countdownUpdate, 1000);
   }
 
   function runLoop(){
@@ -676,6 +709,7 @@
     Game.state=STATE.CAUGHT;
     if (Game.timer){ clearInterval(Game.timer); Game.timer=null; }
     stopStopwatch();
+    $('overlay').style.display='block';
     caughtEl.style.display='block';
     setStatus('Du ble funnet! Trykk Reset for ny runde.');
   }
@@ -686,9 +720,9 @@
     stopStopwatch();
     countdownEl.style.display='none';
     caughtEl.style.display='none';
+    $('overlay').style.display='none';
     clearGhosts();
     Game.shrunk=false;
-    // beholder boundary/obstacles/spiller – klar for ny runde
     setStatus('Klar for ny runde. Minimer panelet om du vil.');
   }
 
@@ -698,9 +732,13 @@
     startGame();
   });
   btnReset.addEventListener('click', resetGame);
+  
+  // Click handlers for game over screen
+  $('overlay').addEventListener('click', resetGame);
+  caughtEl.addEventListener('click', resetGame);
 
   // Init status
-  setStatus('Gi posisjonstillatelse. Uten GeoJSON brukes sirkel på 500 m. Panelet kan minimeres.');
+  setStatus('Panelet kan minimeres.');
 })();
 </script>
 </body>
