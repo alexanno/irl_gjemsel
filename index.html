@@ -105,7 +105,7 @@
       <label for="ghosts">Spøkelser:</label>
       <input id="ghosts" type="number" value="5" min="1" max="100" style="width:70px"/>
       <label for="speed" title="hastighet m/s">Hastighet:</label>
-      <input id="speed" type="number" value="4.2" min="0.5" max="5" step="0.1" style="width:70px"/>
+      <input id="speed" type="number" value="5.5" min="0.5" max="15" step="0.1" style="width:70px"/>
     </div>
 
     <div class="row">
@@ -166,8 +166,11 @@
 
   const STATE={IDLE:'idle', COUNTDOWN:'countdown', RUNNING:'running', CAUGHT:'caught'};
   const Game={
-    state:STATE.IDLE, tickMs:100, hideSeconds:3, timer:null, watcher:null,
-    startedAt:null, stopwatchTimer:null, shrunk:false, shrinkTimeSec:20
+    state:STATE.IDLE, tickMs:100, hideSeconds:10, timer:null, watcher:null,
+    startedAt:null, stopwatchTimer:null, shrunk:false, shrinkTimeSec:20,
+    spawnGhostInterval: 5, // Seconds between new ghost spawns
+    lastGhostSpawn: null,
+    maxGhosts: 25 // Maximum number of ghosts that can be spawned
   };
 
   // Geometri
@@ -608,7 +611,24 @@
     stopwatchEl.style.display='none';
   }
 
-    function startGame(){
+    function spawnGhost(options) {
+    if (!boundaryPoly) return null;
+    const bb = turf.bbox(boundaryPoly);
+    let tries = 0;
+    while (tries < 1000) {
+      tries++;
+      const rnd = turf.randomPoint(1, { bbox: bb }).features[0];
+      if (!turf.booleanPointInPolygon(rnd, boundaryPoly)) continue;
+      const [lng, lat] = rnd.geometry.coordinates;
+      const p = L.latLng(lat, lng);
+      // Make sure ghost spawns away from player
+      if (playerLatLng && metersBetween(p, playerLatLng) < 100) continue;
+      return new Ghost(p, options);
+    }
+    return null;
+  }
+
+  function startGame(){
     if (!playerLatLng){ alert('Sett spillerposisjon (GPS eller trykk i kartet).'); return; }
     if (!boundaryPoly) {
       ensureDefaultBoundary(playerLatLng); // 500 m sirkel
@@ -672,6 +692,25 @@
   function tick(dt){
     if (Game.state!==STATE.RUNNING || !playerLatLng) return;
     
+    // Check if it's time to spawn a new ghost
+    const now = Date.now();
+    if (!Game.lastGhostSpawn) {
+      Game.lastGhostSpawn = now;
+    } else if (ghosts.length < Game.maxGhosts && 
+               (now - Game.lastGhostSpawn) / 1000 >= Game.spawnGhostInterval) {
+      const speed = Number(inputSpeed.value || 1.2);
+      const fov = Number(inputFov.value || 95);
+      const viewDist = Number(inputViewDist.value || 70);
+      const prox = Number(inputProx.value || 0);
+      
+      const newGhost = spawnGhost({ speed, fov, viewDist, proximity: prox });
+      if (newGhost) {
+        ghosts.push(newGhost);
+        Game.lastGhostSpawn = now;
+        setStatus(`Et nytt spøkelse har dukket opp! (${ghosts.length}/${Game.maxGhosts})`);
+      }
+    }
+    
     let playerFound = false;
     const tasks = [];
     
@@ -723,6 +762,7 @@
     $('overlay').style.display='none';
     clearGhosts();
     Game.shrunk=false;
+    Game.lastGhostSpawn=null;
     setStatus('Klar for ny runde. Minimer panelet om du vil.');
   }
 
