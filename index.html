@@ -98,25 +98,18 @@
       <div class="hint">Polygon/multipolygon som omkranser spilleområdet. Uten fil: sirkel 500 m.</div>
     </div>
 
-    <div class="row" style="flex-direction: column; align-items: stretch;">
-      <label><b>Last GeoJSON-hindringer (valgfritt)</b></label>
-      <input id="geojsonObstacles" type="file" accept=".geojson,.json,application/geo+json"/>
-      <div class="hint">Polygoner/multipolygoner inni avgrensningen. Uten fil lages tilfeldige hindringer.</div>
-    </div>
+
 
     <div id="status" class="hint">
       Klargjøring… gi tillatelse til posisjon (GPS). Du kan også trykke i kartet for å sette posisjon manuelt.
     </div>
   </div>
 
-  <div class="legend">
-    <div>🟢 Avgrensning</div>
-    <div>🟥 Hindringer</div>
-    <div>🔵 Du</div>
-    <div>🔴 Spøkelser + lyskjegle</div>
-  </div>
-
-  <div id="countdown"></div>
+    <div class="legend">
+      <div>🟢 Avgrensning</div>
+      <div>🔵 Du</div>
+      <div>🔴 Spøkelser + lyskjegle</div>
+    </div>  <div id="countdown"></div>
   <div id="stopwatch"></div>
   <div id="caught">Du ble funnet! 👻</div>
   <div id="warn" class="warn"></div>
@@ -134,7 +127,7 @@
   const $ = (id)=>document.getElementById(id);
   const btnStart=$('btnStart'), btnReset=$('btnReset'), toggleHud=$('toggleHud');
   const inputGhosts=$('ghosts'), inputSpeed=$('speed'), inputFov=$('fov'), inputViewDist=$('viewDist'), inputProx=$('prox');
-  const fileBoundary=$('geojsonBoundary'), fileObstacles=$('geojsonObstacles');
+  const fileBoundary=$('geojsonBoundary');
   const statusEl=$('status'), countdownEl=$('countdown'), caughtEl=$('caught'), stopwatchEl=$('stopwatch'), warnEl=$('warn');
   const hud=$('hud');
 
@@ -315,55 +308,7 @@
     }
   }
 
-  // --- Obstacles ---
-  function clearObstacles(){
-    obstaclesPolys.length=0;
-    if (obstaclesLayer){ map.removeLayer(obstaclesLayer); obstaclesLayer=null; }
-  }
-  function addObstaclesFromGeoJSON(gj){
-    clearObstacles();
-    obstaclesLayer = L.layerGroup().addTo(map);
-    function pushPoly(turfPolyLike){
-      obstaclesPolys.push(turfPolyLike);
-      L.geoJSON(turfPolyLike, {style:{color:'#c33',weight:2,fillOpacity:.25,fillColor:'#d66'}}).addTo(obstaclesLayer);
-    }
-    if (gj.type==='FeatureCollection'){
-      for(const f of gj.features){
-        if (!f.geometry) continue;
-        if (f.geometry.type==='Polygon') pushPoly(turf.polygon(f.geometry.coordinates));
-        if (f.geometry.type==='MultiPolygon') pushPoly(turf.multiPolygon(f.geometry.coordinates));
-      }
-    } else if (gj.type==='Feature' && gj.geometry){
-      if (gj.geometry.type==='Polygon') pushPoly(turf.polygon(gj.geometry.coordinates));
-      if (gj.geometry.type==='MultiPolygon') pushPoly(turf.multiPolygon(gj.geometry.coordinates));
-    } else if (gj.type==='Polygon' || gj.type==='MultiPolygon'){
-      const p = gj.type==='Polygon' ? turf.polygon(gj.coordinates) : turf.multiPolygon(gj.coordinates);
-      pushPoly(p);
-    }
-    setStatus(`Hindringer lastet: ${obstaclesPolys.length}`);
-  }
-  function generateRandomObstacles(count=6){
-    if (!boundaryPoly) return;
-    clearObstacles();
-    obstaclesLayer = L.layerGroup().addTo(map);
-    const bb=turf.bbox(boundaryPoly);
-    let made=0, tries=0;
-    while(made<count && tries<1000){
-      tries++;
-      const rnd=turf.randomPoint(1,{bbox:bb}).features[0];
-      if (!turf.booleanPointInPolygon(rnd, boundaryPoly)) continue;
-      const [lng,lat]=rnd.geometry.coordinates;
-      const radiusM = 8 + Math.random()*12;
-      const circle = turf.circle([lng,lat], radiusM/1000, {units:'kilometers', steps:24});
-      try {
-        if (!turf.booleanWithin(circle, boundaryPoly)) continue;
-      } catch(e){ continue; }
-      obstaclesPolys.push(circle);
-      L.geoJSON(circle,{style:{color:'#c33',weight:2,fillOpacity:.25,fillColor:'#d66'}}).addTo(obstaclesLayer);
-      made++;
-    }
-    setStatus(`Tilfeldige hindringer generert: ${made}`);
-  }
+  // Obstacle logic removed
 
   // --- Filinnlasting ---
   function readGeoJSONFile(file, onJSON){
@@ -393,34 +338,26 @@
       setStatus('Avgrensning lastet ✔️');
     });
   });
-  fileObstacles.addEventListener('change',(e)=>{
-    const f=e.target.files && e.target.files[0]; if (!f) return;
-    if (!boundaryPoly){ alert('Last eller sett avgrensning først.'); e.target.value=''; return; }
-    readGeoJSONFile(f, (gj)=>addObstaclesFromGeoJSON(gj));
-  });
+
 
   // --- Spiller & posisjonsvalidering ---
   function canMove(fromLL, toLL){
     if (!boundaryPoly) return true;
-    // må være inne i boundary og ikke krysse hindring
+    // må være inne i boundary
     if (!pointInside(boundaryPoly, toLL)) return false;
     if (fromLL){ // sjekk linje-kryssing kun hvis vi har forrige pos
-      if (lineIntersectsAnyObstacle(fromLL, toLL)) return false;
-      // og linjen må ligge i boundary
+      // linjen må ligge i boundary
       if (!lineWithin(boundaryPoly, fromLL, toLL)) return false;
     }
-    // ikke lande inne i hindring
-    if (pointInsideAnyObstacle(toLL)) return false;
     return true;
   }
   function ensurePlayer(ll, acc){
     // valider bevegelse
     if (playerLatLng && !canMove(playerLatLng, ll)){
-      flashWarn('Ugyldig bevegelse (hindring/utenfor område).');
+      flashWarn('Ugyldig bevegelse (utenfor område).');
       return; // ignorer
     }
-    if (!playerLatLng){ // første posisjon: ikke inni hindring
-      if (pointInsideAnyObstacle(ll)){ flashWarn('Kan ikke starte i hindring. Klikk et annet sted.'); return; }
+    if (!playerLatLng){ // første posisjon
       if (boundaryPoly && !pointInside(boundaryPoly, ll)){ flashWarn('Utenfor område.'); return; }
     }
     playerLatLng=ll;
@@ -535,11 +472,10 @@
         const turn=120*dt, diff=((((desired-this.heading)%360)+540)%360)-180;
         this.heading += Math.abs(diff)<=turn ? diff : (diff>0?turn:-turn);
       } else {
-        // Improved patrol behavior
-        // If near boundary or obstacle, add larger heading change
+        // Patrol behavior
         const nextPos = moveFrom(this.latlng, this.heading, this.speed*dt*2);
-        if (!pointInside(boundaryPoly, nextPos) || pointInsideAnyObstacle(nextPos)) {
-          // More dramatic turn when near obstacles/boundaries
+        if (!pointInside(boundaryPoly, nextPos)) {
+          // More dramatic turn when near boundary
           this.heading = (this.heading + (Math.random()*120-60))%360;
         } else {
           // Normal wandering behavior with smoother turns
@@ -553,7 +489,6 @@
           if (!pointInside(boundaryPoly,to)) return false;
           if (!lineWithin(boundaryPoly, from, to)) return false;
         }
-        if (lineIntersectsAnyObstacle(from,to)) return false;
         return true;
       };
       if (!validMove(this.latlng, next)){
@@ -645,19 +580,11 @@
     stopwatchEl.style.display='none';
   }
 
-  function startGame(){
+    function startGame(){
     if (!playerLatLng){ alert('Sett spillerposisjon (GPS eller trykk i kartet).'); return; }
     if (!boundaryPoly) {
       ensureDefaultBoundary(playerLatLng); // 500 m sirkel
-      // Ensure boundary is set before generating obstacles
-      if (boundaryPoly && !obstaclesPolys.length) {
-        generateRandomObstacles(6);
-      }
-    } else if (!obstaclesPolys.length) {
-      generateRandomObstacles(6);
-    }
-
-    clearGhosts();
+    }    clearGhosts();
     caughtEl.style.display='none';
 
     const n=Math.max(1, Math.min(100, Number(inputGhosts.value||3)));
@@ -705,7 +632,7 @@
     Game.state=STATE.RUNNING;
     if (Game.timer) clearInterval(Game.timer);
     Game.timer=setInterval(()=>tick(Game.tickMs/1000), Game.tickMs);
-    setStatus('Spillet er i gang! Hindringer blokkerer sikt – bruk dem smart.');
+    setStatus('Spillet er i gang! Hold deg unna spøkelsenes synsfelt.');
     startStopwatch();
   }
 
