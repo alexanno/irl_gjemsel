@@ -15,8 +15,8 @@
   <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
 
   <!-- Firebase -->
-  <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 
   <style>
     /* Leaderboard styles */
@@ -306,9 +306,10 @@
   // Initialize Firebase
   firebase.initializeApp(firebaseConfig);
   const db = firebase.database();
-  // Set the correct database URL for Europe region
-  db.useEmulator("https://irl-gjemsel-default-rtdb.europe-west1.firebasedatabase.app");
   const leaderboardRef = db.ref('leaderboard');
+  
+  // Configure database URL explicitly
+  db.refFromURL('https://irl-gjemsel-default-rtdb.europe-west1.firebasedatabase.app');
 
   // Leaderboard functions
   function updateLeaderboardDisplay(scores) {
@@ -325,18 +326,18 @@
   }
 
   function loadLeaderboard() {
-    leaderboardRef.orderByChild('time').limitToFirst(5).once('value', snapshot => {
+    leaderboardRef.orderByChild('time').limitToLast(5).once('value', snapshot => { // Changed to limitToLast to get highest values
       const scores = [];
       snapshot.forEach(childSnapshot => {
         scores.push(childSnapshot.val());
       });
-      scores.sort((a, b) => a.time - b.time);
+      scores.sort((a, b) => b.time - a.time); // Sort by longest time first
       updateLeaderboardDisplay(scores);
     });
   }
 
   async function checkHighScore(time, ghostCount) {
-    const snapshot = await leaderboardRef.orderByChild('time').limitToLast(1).once('value');
+    const snapshot = await leaderboardRef.orderByChild('time').limitToFirst(1).once('value');
     let isTop10 = false;
     let scores = [];
     
@@ -346,9 +347,9 @@
       });
     });
     
-    scores.sort((a, b) => a.time - b.time);
+    scores.sort((a, b) => b.time - a.time); // Sort by longest time first
     
-    if (scores.length < 10 || time < scores[9].time) {
+    if (scores.length < 10 || time > scores[9].time) { // Changed condition to check for longer time
       isTop10 = true;
     }
     
