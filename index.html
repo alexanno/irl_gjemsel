@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>IRL Spøkelsesspill - Hindringer + Sonekrymp</title>
+<title>IRL Gjemsel</title>
 
   <!-- Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -436,8 +436,25 @@
       this.proximity=opts.proximity||0;
       this.mode='patrol';
       this.lastSeenTarget=null;
+      this.searchUntil=0;
+      this.patrolTarget=this.pickPatrolTarget();
+      this.patrolRecalcAt=Date.now()+8000+Math.random()*4000;
       this.marker=L.circleMarker(ll,{radius:6,weight:2,color:'#222',fillColor:'#f66',fillOpacity:.9}).addTo(map);
       this.cone=L.polygon(this.computeCone(),{weight:1,color:'#c44',fillColor:'#fcc',fillOpacity:.15}).addTo(map);
+    }
+    pickPatrolTarget(){
+      if (!boundaryPoly) return null;
+      const bb=turf.bbox(boundaryPoly);
+      for(let tries=0; tries<60; tries++){
+        const rnd=turf.randomPoint(1,{bbox:bb}).features[0];
+        if (!turf.booleanPointInPolygon(rnd, boundaryPoly)) continue;
+        const [lng,lat]=rnd.geometry.coordinates;
+        const ll=L.latLng(lat,lng);
+        if (pointInsideAnyObstacle(ll)) continue;
+        return ll;
+      }
+      const c=turf.centroid(boundaryPoly).geometry.coordinates;
+      return L.latLng(c[1], c[0]);
     }
     computeCone(){
       // Normalize heading to [0, 360)
@@ -493,27 +510,87 @@
       
       return true;
     }
-    steer(dt, playerLL){
-      if (this.seesPlayer(playerLL)){ this.mode='chase'; this.lastSeenTarget=playerLL; }
-      else if (this.mode==='chase' && this.lastSeenTarget){
-        if (metersBetween(this.latlng, this.lastSeenTarget)<3){ this.mode='patrol'; this.lastSeenTarget=null; }
+    steer(dt, playerLL, allGhosts){
+      const now=Date.now();
+      const sees=this.seesPlayer(playerLL);
+      if (sees){
+        const snapshot=L.latLng(playerLL.lat, playerLL.lng);
+        this.mode='chase';
+        this.lastSeenTarget=snapshot;
+        this.searchUntil=now+6000;
+      } else if (this.mode==='chase' && this.lastSeenTarget){
+        this.mode='search';
+      } else if (this.mode==='search' && (!this.lastSeenTarget || now>this.searchUntil)){
+        this.mode='patrol';
+        this.lastSeenTarget=null;
+        this.searchUntil=0;
+        if (!this.patrolTarget) this.patrolTarget=this.pickPatrolTarget();
       }
+
+      const clampHeadingDiff=(current, desired, maxTurn)=>{
+        const diff=((((desired-current)%360)+540)%360)-180;
+        if (Math.abs(diff)<=maxTurn) return current+diff;
+        return current+(diff>0?maxTurn:-maxTurn);
+      };
+
+      let desiredHeading=this.heading;
+      let moveSpeed=this.speed;
+
       if (this.mode==='chase' && playerLL){
-        const desired=bearingTo(this.latlng, playerLL);
-        const turn=120*dt, diff=((((desired-this.heading)%360)+540)%360)-180;
-        this.heading += Math.abs(diff)<=turn ? diff : (diff>0?turn:-turn);
+        desiredHeading=bearingTo(this.latlng, playerLL);
+        this.heading=clampHeadingDiff(this.heading, desiredHeading, 160*dt);
+      } else if (this.mode==='search' && this.lastSeenTarget){
+        desiredHeading=bearingTo(this.latlng, this.lastSeenTarget);
+        const sweep=Math.sin(now/500)*35; // gentle oscillation while searching
+        desiredHeading=(desiredHeading+sweep+360)%360;
+        moveSpeed=this.speed*0.75;
+        this.heading=clampHeadingDiff(this.heading, desiredHeading, 100*dt);
+        if (metersBetween(this.latlng, this.lastSeenTarget)<8){
+          this.mode='patrol';
+          this.lastSeenTarget=null;
+          this.searchUntil=0;
+          this.patrolTarget=this.pickPatrolTarget();
+          this.patrolRecalcAt=now+9000+Math.random()*6000;
+        }
       } else {
-        // Patrol behavior
-        const nextPos = moveFrom(this.latlng, this.heading, this.speed*dt*2);
-        if (!pointInside(boundaryPoly, nextPos)) {
-          // More dramatic turn when near boundary
-          this.heading = (this.heading + (Math.random()*120-60))%360;
-        } else {
-          // Normal wandering behavior with smoother turns
-          this.heading = (this.heading + (Math.random()*20-10)*dt)%360;
+        if (!this.patrolTarget || !pointInside(boundaryPoly, this.patrolTarget) || metersBetween(this.latlng, this.patrolTarget)<8 || now>this.patrolRecalcAt){
+          this.patrolTarget=this.pickPatrolTarget();
+          this.patrolRecalcAt=now+9000+Math.random()*6000;
+        }
+        if (this.patrolTarget){
+          desiredHeading=bearingTo(this.latlng, this.patrolTarget);
+        }
+        this.heading=clampHeadingDiff(this.heading, desiredHeading, 60*dt);
+        // If the patrol segment would leave the boundary, pick a new target immediately
+        const probe=moveFrom(this.latlng, this.heading, this.speed*dt*2);
+        if (boundaryPoly && (!pointInside(boundaryPoly, probe) || !lineWithin(boundaryPoly, this.latlng, probe))){
+          this.patrolTarget=this.pickPatrolTarget();
         }
       }
-      const step=this.speed*dt;
+
+      this.heading=((this.heading%360)+360)%360;
+
+      if (Array.isArray(allGhosts) && allGhosts.length>1){
+        let vx=0, vy=0;
+        for(const other of allGhosts){
+          if (other===this || !other.latlng) continue;
+          const dist=metersBetween(this.latlng, other.latlng);
+          if (!dist || dist>25) continue;
+          const away=bearingTo(other.latlng, this.latlng);
+          const strength=(25-dist)/25;
+          const rad=away*Math.PI/180;
+          vx+=Math.cos(rad)*strength;
+          vy+=Math.sin(rad)*strength;
+        }
+        if (vx || vy){
+          const sep=(Math.atan2(vy, vx)*180/Math.PI+360)%360;
+          const diff=((((sep-this.heading)%360)+540)%360)-180;
+          const adjust=Math.max(-25, Math.min(25, diff*0.4));
+          this.heading=(this.heading+adjust+360)%360;
+        }
+      }
+
+      const step=moveSpeed*dt;
       let next=moveFrom(this.latlng, this.heading, step);
       const validMove=(from,to)=>{
         if (boundaryPoly){
@@ -531,7 +608,11 @@
           if (validMove(this.latlng, tryPos)){ fixed={h,tryPos}; break; }
         }
         if (fixed){ this.heading=fixed.h; next=fixed.tryPos; }
-        else { next=this.latlng; this.heading=(this.heading+180)%360; }
+        else {
+          next=this.latlng;
+          this.heading=(this.heading+180)%360;
+          this.patrolTarget=this.pickPatrolTarget();
+        }
       }
       this.latlng=next;
       this.marker.setLatLng(this.latlng);
@@ -726,7 +807,7 @@
         tasks.push(g);
       }
       // Update movement regardless
-      g.steer(dt, playerLatLng);
+      g.steer(dt, playerLatLng, ghosts);
     }
     
     // If player not found by proximity, do full visibility checks
