@@ -14,9 +14,145 @@
   <!-- Turf.js -->
   <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
 
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-database-compat.js"></script>
+
   <style>
+    /* Leaderboard styles */
+    #leaderboard {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 1000;
+      background: rgba(255,255,255,0.94);
+      padding: 10px 12px;
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+      max-width: 300px;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    #leaderboard h2 {
+      margin: 0 0 10px;
+      font-size: 16px;
+    }
+    #leaderboard-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    #leaderboard-list li {
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(0,0,0,0.1);
+    }
+    #leaderboard-list li:last-child {
+      border-bottom: none;
+    }
+    #nickname-modal {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 32px rgba(0,0,0,0.3);
+      z-index: 2000;
+      display: none;
+    }
+    #nickname-modal input {
+      width: 100%;
+      padding: 8px;
+      margin: 10px 0;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+    #nickname-modal button {
+      width: 100%;
+      padding: 8px;
+      background: #2b7;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
     html, body, #map { height: 100%; margin: 0; }
     .hidden { display: none !important; }
+    
+    /* Leaderboard styles */
+    #leaderboard {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 1000;
+      background: rgba(255,255,255,0.94);
+      padding: 10px 12px;
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+      max-width: 300px;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    #leaderboard h2 {
+      margin: 0 0 10px;
+      font-size: 16px;
+    }
+    #leaderboard-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    #leaderboard-list li {
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(0,0,0,0.1);
+      font-size: 14px;
+    }
+    #leaderboard-list li:last-child {
+      border-bottom: none;
+    }
+    
+    /* Nickname modal styles */
+    #nickname-modal {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 32px rgba(0,0,0,0.3);
+      z-index: 2000;
+      display: none;
+      width: 300px;
+      text-align: center;
+    }
+    #nickname-modal h3 {
+      margin: 0 0 10px;
+      font-size: 18px;
+    }
+    #nickname-modal input {
+      width: calc(100% - 20px);
+      padding: 8px;
+      margin: 10px 0;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 16px;
+    }
+    #nickname-modal button {
+      width: 100%;
+      padding: 10px;
+      background: #2b7;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: 600;
+      margin-top: 10px;
+    }
+    #nickname-modal button:hover {
+      background: #1a6;
+    }
     #hud {
       position: absolute; top: 10px; left: 10px; z-index: 1000;
       background: rgba(255,255,255,0.94); padding: 10px 12px; border-radius: 12px;
@@ -142,12 +278,115 @@
   <div id="caught">Du ble funnet! 👻</div>
   <div id="warn" class="warn"></div>
 
+  <div id="leaderboard">
+    <h2>Toppliste 🏆</h2>
+    <ul id="leaderboard-list"></ul>
+  </div>
+
+  <div id="nickname-modal">
+    <h3>Gratulerer! Du er på topp 10!</h3>
+    <p>Skriv inn navnet ditt:</p>
+    <input type="text" id="nickname-input" maxlength="50" placeholder="Navn">
+    <button id="save-nickname">Lagre</button>
+  </div>
+
 <script>
 (function() {
+  // Firebase configuration and initialization
+  const firebaseConfig = {
+    apiKey: "AIzaSyC6Dtf_R_xe-zWORr1T4-jkpqfaNmkeHj4",
+    authDomain: "irl-gjemsel.firebaseapp.com",
+    databaseURL: "https://irl-gjemsel-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "irl-gjemsel",
+    storageBucket: "irl-gjemsel.firebasestorage.app",
+    messagingSenderId: "809549687443",
+    appId: "1:809549687443:web:4fc9a3d18a5205dadefb66"
+  };
+  
+  // Initialize Firebase
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+  // Set the correct database URL for Europe region
+  db.useEmulator("https://irl-gjemsel-default-rtdb.europe-west1.firebasedatabase.app");
+  const leaderboardRef = db.ref('leaderboard');
+
+  // Leaderboard functions
+  function updateLeaderboardDisplay(scores) {
+    const leaderboardList = document.getElementById('leaderboard-list');
+    leaderboardList.innerHTML = '';
+    scores.forEach((score, index) => {
+      const li = document.createElement('li');
+      const time = Math.floor(score.time);
+      const minutes = Math.floor(time / 60);
+      const seconds = (time % 60).toString().padStart(2, '0');
+      li.textContent = `${index + 1}. ${score.playerName} - ${minutes}:${seconds} (👻 ${score.ghostCount})`;
+      leaderboardList.appendChild(li);
+    });
+  }
+
+  function loadLeaderboard() {
+    leaderboardRef.orderByChild('time').limitToFirst(5).once('value', snapshot => {
+      const scores = [];
+      snapshot.forEach(childSnapshot => {
+        scores.push(childSnapshot.val());
+      });
+      scores.sort((a, b) => a.time - b.time);
+      updateLeaderboardDisplay(scores);
+    });
+  }
+
+  async function checkHighScore(time, ghostCount) {
+    const snapshot = await leaderboardRef.orderByChild('time').limitToLast(1).once('value');
+    let isTop10 = false;
+    let scores = [];
+    
+    await leaderboardRef.orderByChild('time').once('value', snapshot => {
+      snapshot.forEach(childSnapshot => {
+        scores.push(childSnapshot.val());
+      });
+    });
+    
+    scores.sort((a, b) => a.time - b.time);
+    
+    if (scores.length < 10 || time < scores[9].time) {
+      isTop10 = true;
+    }
+    
+    if (isTop10) {
+      return new Promise((resolve) => {
+        const modal = document.getElementById('nickname-modal');
+        const input = document.getElementById('nickname-input');
+        const saveBtn = document.getElementById('save-nickname');
+        
+        modal.style.display = 'block';
+        
+        saveBtn.onclick = () => {
+          const playerName = input.value.trim();
+          if (playerName) {
+            leaderboardRef.push({
+              playerName,
+              time,
+              ghostCount,
+              timestamp: firebase.database.ServerValue.TIMESTAMP
+            });
+            modal.style.display = 'none';
+            loadLeaderboard();
+            resolve();
+          }
+        };
+      });
+    }
+  }
+
+  // Load leaderboard on startup
+  loadLeaderboard();
+
   // --- Kart ---
   const map = L.map('map', { zoomControl: true });
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 20, attribution: '&copy; OpenStreetMap'
+    maxZoom: 19,
+    minZoom: 1,
+    attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map);
   map.setView([58.1467, 7.9956], 15); // Kristiansand
 
@@ -829,9 +1068,18 @@
     Game.state=STATE.CAUGHT;
     if (Game.timer){ clearInterval(Game.timer); Game.timer=null; }
     stopStopwatch();
-    $('overlay').style.display='block';
-    caughtEl.style.display='block';
-    setStatus('Du ble funnet! Trykk Reset for ny runde.');
+    
+    // Calculate time played
+    const timePlayedMs = Date.now() - Game.startedAt;
+    const timePlayedSec = Math.floor(timePlayedMs / 1000);
+    
+    // Check for high score
+    checkHighScore(timePlayedSec, ghosts.length).then(() => {
+      $('overlay').style.display='block';
+      caughtEl.style.display='block';
+      loadLeaderboard(); // Refresh leaderboard display
+      setStatus('Du ble funnet! Trykk Reset for ny runde.');
+    });
   }
 
   function resetGame(){
