@@ -96,11 +96,41 @@
     #leaderboard h2 {
       margin: 0 0 10px;
       font-size: 16px;
+      display: inline-block;
+    }
+    #toggleLeaderboard {
+      float: right;
+      border: none;
+      background: #eee;
+      border-radius: 10px;
+      padding: 6px 8px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+    #leaderboard.min #leaderboard-list {
+      display: none;
+    }
+    #leaderboard.min h2 {
+      display: none;
+    }
+    #leaderboard.min {
+      opacity: 0.92;
+      padding: 6px;
+      background: transparent;
+      box-shadow: none;
+    }
+    #leaderboard.min #toggleLeaderboard {
+      float: none;
+      font-size: 20px;
+      padding: 8px 12px;
+      background: rgba(255,255,255,0.94);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2);
     }
     #leaderboard-list {
       list-style: none;
       padding: 0;
       margin: 0;
+      clear: both;
     }
     #leaderboard-list li {
       padding: 4px 0;
@@ -162,6 +192,7 @@
     }
     #hud.min .row:not(:first-child) { display: none; }
     #hud.min { opacity: .92; }
+    #hud.min h1 { display: none; }
     #hud h1 { margin: 0 0 6px; font-size: 16px; display: inline-block; }
     #toggleHud {
       float: right; border: none; background: #eee; border-radius: 10px; padding: 6px 8px;
@@ -228,9 +259,9 @@
 <body>
   <div id="map"></div>
   <div id="overlay"></div>
-  <div id="hud">
+  <div id="hud" class="min">
     <h1>IRL Spøkelsesspill 👻</h1>
-    <button id="toggleHud" title="Minimer/utvid">−</button>
+    <button id="toggleHud" title="Minimer/utvid">+</button>
 
     <div class="row">
       <button id="btnStart">Start (20s gjemmetid)</button>
@@ -278,8 +309,9 @@
   <div id="caught">Du ble funnet! 👻</div>
   <div id="warn" class="warn"></div>
 
-  <div id="leaderboard">
+  <div id="leaderboard" class="min">
     <h2>Toppliste 🏆</h2>
+    <button id="toggleLeaderboard" title="Minimer/utvid">🏆</button>
     <ul id="leaderboard-list"></ul>
   </div>
 
@@ -381,6 +413,14 @@
 
   // Load leaderboard on startup
   loadLeaderboard();
+
+  // Setup leaderboard toggle
+  const toggleLeaderboard = document.getElementById('toggleLeaderboard');
+  toggleLeaderboard.addEventListener('click', () => {
+    const leaderboard = document.getElementById('leaderboard');
+    leaderboard.classList.toggle('min');
+    toggleLeaderboard.textContent = leaderboard.classList.contains('min') ? '🏆' : '−';
+  });
 
   // --- Kart ---
   const map = L.map('map', { zoomControl: true });
@@ -1093,7 +1133,7 @@
     clearGhosts();
     Game.shrunk=false;
     Game.lastGhostSpawn=null;
-    setStatus('Klar for ny runde. Minimer panelet om du vil.');
+    setStatus('Klar for ny runde.');
   }
 
   // Knapper
@@ -1108,7 +1148,7 @@
   caughtEl.addEventListener('click', resetGame);
 
   // Init status
-  setStatus('Panelet kan minimeres.');
+  setStatus('Klar til start!');
 })();
 </script>
 </body>
