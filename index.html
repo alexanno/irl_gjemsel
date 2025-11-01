@@ -201,7 +201,7 @@
     #hud .row { display: flex; gap: 8px; align-items: center; margin: 6px 0; flex-wrap: wrap; }
     #hud label { font-size: 12px; }
     #hud input[type="file"] { width: 100%; }
-    #hud button { padding: 8px 10px; border: none; border-radius: 10px; background: #2b7; color: #fff; font-weight: 600; cursor: pointer; }
+    #hud button { padding: 8px 10px; margin-right:10px; float:left;border-radius: 10px; background: #2b7; color: #fff; font-weight: 600; cursor: pointer; }
     #hud button.secondary { background: #777; }
     #hud button:disabled { opacity: .6; cursor: not-allowed; }
     #status { margin-top: 6px; font-size: 13px; }
@@ -260,8 +260,9 @@
   <div id="map"></div>
   <div id="overlay"></div>
   <div id="hud" class="min">
-    <h1>IRL Spøkelsesspill 👻</h1>
     <button id="toggleHud" title="Minimer/utvid">+</button>
+    <h1>IRL Spøkelsesspill 👻</h1>
+    
 
     <div class="row">
       <button id="btnStart">Start (20s gjemmetid)</button>
