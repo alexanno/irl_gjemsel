@@ -423,6 +423,8 @@
     toggleLeaderboard.textContent = leaderboard.classList.contains('min') ? '🏆' : '−';
   });
 
+  const defaultZoom = 19;
+
   // --- Kart ---
   const map = L.map('map', { zoomControl: true });
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -430,7 +432,7 @@
     minZoom: 1,
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map);
-  map.setView([58.1467, 7.9956], 19); // Kristiansand
+  map.setView([58.1467, 7.9956], defaultZoom); // Kristiansand
 
   // UI
   const $ = (id)=>document.getElementById(id);
@@ -515,7 +517,7 @@
     clearTimeout(flashWarn._t);
     flashWarn._t = setTimeout(()=> warnEl.style.display='none', 1200);
   }
-
+ 
   // --- Boundary ---
   function drawBoundary(poly){
     if (boundaryLayer){ map.removeLayer(boundaryLayer); }
@@ -526,7 +528,10 @@
     boundaryIsCircle=isCircle;
     originalBoundaryGeom = turf.clone(poly);
     drawBoundary(poly);
-    try { map.fitBounds(boundaryLayer.getBounds(), {padding:[30,30]}); } catch (e){}
+    try { 
+      const center = turf.center(boundaryPoly);
+      map.setView([center.geometry.coordinates[1], center.geometry.coordinates[0]], defaultZoom);
+    } catch (e){}
   }
   function ensureDefaultBoundary(center){
     const c=center||map.getCenter();
@@ -701,11 +706,12 @@
     setStatus('Ingen geolokasjon. Trykk i kartet for å sette posisjon.');
     ensureDefaultBoundary(map.getCenter());
   }
+  /*
   map.on('click', e=>{
     if (!boundaryPoly) ensureDefaultBoundary(e.latlng); // første gang
     ensurePlayer(e.latlng, 5);
   });
-
+  */
   // --- Spøkelse ---
   class Ghost{
     constructor(ll, opts){
