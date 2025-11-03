@@ -996,11 +996,42 @@
     return null;
   }
 
+  // Wake Lock variable
+  let wakeLock = null;
+
+  // Function to request wake lock
+  async function requestWakeLock() {
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+      //console.log('Wake Lock is active');
+    } catch (err) {
+      console.log(`Failed to get Wake Lock: ${err.name}, ${err.message}`);
+    }
+  }
+
+  // Function to release wake lock
+  function releaseWakeLock() {
+    if (wakeLock !== null) {
+      wakeLock.release()
+        .then(() => {
+          //console.log('Wake Lock has been released');
+          wakeLock = null;
+        })
+        .catch((err) => {
+          console.error(`Failed to release Wake Lock: ${err.name}, ${err.message}`);
+        });
+    }
+  }
+
   function startGame(){
     if (!playerLatLng){ alert('Sett spillerposisjon (GPS eller trykk i kartet).'); return; }
     if (!boundaryPoly) {
       ensureDefaultBoundary(playerLatLng); // 500 m sirkel
-    }    clearGhosts();
+    }
+    clearGhosts();
+    
+    // Request wake lock when game starts
+    requestWakeLock();
     caughtEl.style.display='none';
 
     const n=Math.max(1, Math.min(100, Number(inputGhosts.value||3)));
@@ -1117,6 +1148,9 @@
     if (Game.timer){ clearInterval(Game.timer); Game.timer=null; }
     stopStopwatch();
     
+    // Release wake lock when game ends
+    releaseWakeLock();
+    
     // Calculate time played
     const timePlayedMs = Date.now() - Game.startedAt;
     const timePlayedSec = Math.floor(timePlayedMs / 1000);
@@ -1140,6 +1174,10 @@
     clearGhosts();
     Game.shrunk=false;
     Game.lastGhostSpawn=null;
+    
+    // Release wake lock when game is reset
+    releaseWakeLock();
+    
     setStatus('Klar for ny runde.');
   }
 
