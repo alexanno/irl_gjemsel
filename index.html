@@ -190,20 +190,21 @@
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       transition: max-height .2s ease, opacity .2s ease;
     }
-    #hud.min .row:not(:first-child) { display: none; }
+    #hud.min .hidewrapper { display: none; }
     #hud.min { opacity: .92; }
-    /**#hud.min h1 { display: none; }*/
     #hud h1 { margin: 0 0 6px; font-size: 16px; display: inline-block; }
-    #toggleHud {
-      float: right; border: none; background: #eee; border-radius: 10px; padding: 6px 8px;
-      cursor: pointer; font-weight: 700;
-    }
+    
     #hud .row { display: flex; gap: 8px; align-items: center; margin: 6px 0; flex-wrap: wrap; }
     #hud label { font-size: 12px; }
     #hud input[type="file"] { width: 100%; }
-    #hud button { padding: 8px 10px; margin-right:10px; float:left;border-radius: 10px; background: #2b7; color: #fff; font-weight: 600; cursor: pointer; }
+    #hud button { padding: 3px 4px; margin-right:10px; float:left;border-radius: 10px; background: #2b7; color: #fff; font-weight: 600; cursor: pointer; }
     #hud button.secondary { background: #777; }
     #hud button:disabled { opacity: .6; cursor: not-allowed; }
+
+    #toggleHud{
+      float: right; border: none; background: #ffffff !important; border-radius: 1px; padding: 3px 4px;
+      cursor: pointer; font-weight: 700;
+    }
     #status { margin-top: 6px; font-size: 13px; }
     #countdown {
       position: absolute; left: 50%; bottom: 80px;
@@ -254,13 +255,61 @@
       background: rgba(255,165,0,.95); color: #000; padding: 8px 12px; border-radius: 10px; z-index: 1200; display: none;
       font-weight: 700; font-size: 14px;
     }
+    #welcome-modal {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      padding: 24px;
+      border-radius: 16px;
+      box-shadow: 0 4px 32px rgba(0,0,0,0.3);
+      z-index: 2000;
+      width: 90%;
+      max-width: 500px;
+      text-align: left;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    #welcome-modal h2 {
+      margin: 0 0 16px;
+      font-size: 24px;
+      color: #222;
+    }
+    #welcome-modal p {
+      margin: 8px 0;
+      line-height: 1.5;
+      color: #333;
+    }
+    #welcome-modal ul {
+      margin: 12px 0;
+      padding-left: 24px;
+    }
+    #welcome-modal li {
+      margin: 6px 0;
+      line-height: 1.4;
+    }
+    #welcome-modal button {
+      width: 100%;
+      padding: 12px;
+      background: #2b7;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: 600;
+      margin-top: 20px;
+    }
+    #welcome-modal button:hover {
+      background: #1a6;
+    }
   </style>
 </head>
 <body>
   <div id="map"></div>
   <div id="overlay"></div>
   <div id="hud" class="min">
-    <button id="toggleHud" title="Minimer/utvid">+</button>
+    <button id="toggleHud" title="Minimer/utvid">⚙️</button>
     <h1>IRL Spøkelsesspill 👻</h1>
     
 
@@ -269,29 +318,31 @@
       <button id="btnReset" class="secondary">Reset</button>
     </div>
 
-    <div class="row">
-      <label for="ghosts">Spøkelser:</label>
-      <input id="ghosts" type="number" value="5" min="1" max="100" style="width:70px"/>
-      <label for="speed" title="hastighet m/s">Hastighet:</label>
-      <input id="speed" type="number" value="5.5" min="0.5" max="15" step="0.1" style="width:70px"/>
-    </div>
+    <div class="hidewrapper">
+      <div class="row">
+        <label for="ghosts">Spøkelser:</label>
+        <input id="ghosts" type="number" value="5" min="1" max="100" style="width:70px"/>
+        <label for="speed" title="hastighet m/s">Hastighet:</label>
+        <input id="speed" type="number" value="5.5" min="0.5" max="15" step="0.1" style="width:70px"/>
+      </div>
 
-    <div class="row">
-      <label for="fov" title="Synsfelt i grader">FOV°:</label>
-      <input id="fov" type="number" value="95" min="30" max="180" step="5" style="width:70px"/>
-      <label for="viewDist" title="Synsrekkevidde i meter">Rekkevidde(m):</label>
-      <input id="viewDist" type="number" value="70" min="10" max="200" step="5" style="width:80px"/>
-    </div>
+      <div class="row">
+        <label for="fov" title="Synsfelt i grader">FOV°:</label>
+        <input id="fov" type="number" value="95" min="30" max="180" step="5" style="width:70px"/>
+        <label for="viewDist" title="Synsrekkevidde i meter">Rekkevidde(m):</label>
+        <input id="viewDist" type="number" value="70" min="10" max="200" step="5" style="width:80px"/>
+      </div>
 
-    <div class="row hidden">
-      <label for="prox" title="Fanges innenfor denne avstanden, uansett syn">Nærhet(m):</label>
-      <input id="prox" type="number" value="0" min="1" max="30" step="1" style="width:80px"/>
-    </div>
+      <div class="row hidden">
+        <label for="prox" title="Fanges innenfor denne avstanden, uansett syn">Nærhet(m):</label>
+        <input id="prox" type="number" value="0" min="1" max="30" step="1" style="width:80px"/>
+      </div>
 
-    <div class="row hidden" style="flex-direction: column; align-items: stretch;">
-      <label><b>Last GeoJSON-avgrensning (valgfritt)</b></label>
-      <input id="geojsonBoundary" type="file" accept=".geojson,.json,application/geo+json"/>
-      <div class="hint">Polygon/multipolygon som omkranser spilleområdet. Uten fil: sirkel 500 m.</div>
+      <div class="row hidden" style="flex-direction: column; align-items: stretch;">
+        <label><b>Last GeoJSON-avgrensning (valgfritt)</b></label>
+        <input id="geojsonBoundary" type="file" accept=".geojson,.json,application/geo+json"/>
+        <div class="hint">Polygon/multipolygon som omkranser spilleområdet. Uten fil: sirkel 500 m.</div>
+      </div>
     </div>
 
 
@@ -321,6 +372,22 @@
     <p>Skriv inn navnet ditt:</p>
     <input type="text" id="nickname-input" maxlength="50" placeholder="Navn">
     <button id="save-nickname">Lagre</button>
+  </div>
+
+  <div id="welcome-modal">
+    <h2>Velkommen til IRL Gjemsel! 👻</h2>
+    <p><strong>Dette er et fysisk gjemselspill hvor du må løpe fra spøkelser i virkeligheten!</strong></p>
+    <ul>
+      <li>🎯 <strong>Mål:</strong> Hold deg i live lengst mulig ved å unngå spøkelsenes synsfelt</li>
+      <li>👻 <strong>Spøkelser:</strong> Røde prikker på kartet. De har en lyskjegle som viser hva de ser</li>
+      <li>🏃‍♂️ <strong>Du:</strong> Blå prikk på kartet (GPS-posisjon). Beveg deg fysisk for å unngå spøkelsene</li>
+      <li>⚡ <strong>Tips:</strong> Hold øye med kartet og spøkelsenes bevegelser. Husk å pass på biler og stolper!</li>
+      <li>⏰ <strong>Områdekrymp:</strong> Etter 2 minutter krymper spilleområdet til 80%</li>
+      <li>🆕 <strong>Nye spøkelser:</strong> Dukker opp med jevne mellomrom</li>
+      <li>🏆 <strong>Toppliste:</strong> De som overlever lengst havner på topplisten!</li>
+      <li>⚙️ <strong>Innstillinger:</strong> Juster vanskelighetsgrad i menyen (antall spøkelser, hastighet, synsfelt, osv.)</li>
+    </ul>
+    <button id="welcome-start">La oss begynne! 🎮</button>
   </div>
 
 <script>
@@ -444,7 +511,7 @@
 
   toggleHud.addEventListener('click', ()=>{
     hud.classList.toggle('min');
-    toggleHud.textContent = hud.classList.contains('min') ? '+' : '−';
+    //toggleHud.textContent = hud.classList.contains('min') ? '+' : '−';
   });
 
   const STATE={IDLE:'idle', COUNTDOWN:'countdown', RUNNING:'running', CAUGHT:'caught'};
@@ -1191,6 +1258,22 @@
   // Click handlers for game over screen
   $('overlay').addEventListener('click', resetGame);
   caughtEl.addEventListener('click', resetGame);
+
+  // Welcome modal handling
+  const welcomeModal = $('welcome-modal');
+  const welcomeStartBtn = $('welcome-start');
+
+  /* Show welcome modal on first visit
+  if (!localStorage.getItem('hasSeenWelcome')) {
+    welcomeModal.style.display = 'block';
+  } else {
+    welcomeModal.style.display = 'none';
+  }
+  */
+  welcomeStartBtn.addEventListener('click', () => {
+    welcomeModal.style.display = 'none';
+    localStorage.setItem('hasSeenWelcome', 'true');
+  });
 
   // Init status
   setStatus('Klar til start!');
