@@ -2,7 +2,7 @@
 
 **Et fysisk gjemselspill hvor du løper fra spøkelser i virkeligheten!**
 
-IRL Gjemsel er et nyskapende mobilspill som kombinerer virtual reality-elementer med fysisk aktivitet. Spillet bruker GPS-posisjoneringen din til å plassere deg på et kart, mens AI-styrte spøkelser prøver å finne deg. Du må faktisk bevege deg fysisk for å unngå å bli oppdaget!
+IRL Gjemsel er et nyskapende mobilspill som kombinerer kartelementer med fysisk aktivitet. Spillet bruker GPS-posisjoneringen din til å plassere deg på et kart, mens AI-styrte spøkelser prøver å finne deg. Du må faktisk bevege deg fysisk for å unngå å bli oppdaget!
 
 ## 🎮 Hvordan det fungerer
 
@@ -46,9 +46,9 @@ Prosjektet er bygget med følgende teknologier:
 
 ## 🚀 Deployment
 
-Prosjektet er deployet via Firebase Hosting:
+Prosjektet er deployet via Firebase Hosting.
 
-**URL:** `https://irl-gjemsel.web.app` (eller tilsvarende Firebase hosting URL)
+For å deploye din egen versjon, konfigurer Firebase Hosting og oppdater Firebase-konfigurasjonen i `index.html`.
 
 ### Deployment-prosess
 1. Firebase-konfigurasjonen er inkludert i `index.html`
@@ -127,7 +127,7 @@ Se de beste spillerne og deres overlevelsestid. Hvis du havner på topp 10, kan 
 #### Innstillingsmeny
 Juster vanskelighetsgrad ved å endre antall spøkelser, deres hastighet, synsfelt og rekkevidde.
 
-*Merk: For å se faktiske screenshots, åpne `https://irl-gjemsel.web.app` på en mobil enhet*
+*Merk: For å se spillet i aksjon, åpne `index.html` i en nettleser med GPS-tilgang på en mobil enhet*
 
 ## 🎯 Fremtidige forbedringer
 
