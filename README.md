@@ -4,6 +4,9 @@
 
 IRL Gjemsel er et nyskapende mobilspill som kombinerer kartelementer med fysisk aktivitet. Spillet bruker GPS-posisjoneringen din til å plassere deg på et kart, mens AI-styrte spøkelser prøver å finne deg. Du må faktisk bevege deg fysisk for å unngå å bli oppdaget!
 
+![alt text](image.png) 
+![alt text](image-1.png)
+
 ## 🎮 Hvordan det fungerer
 
 1. **Start spillet** - Gi nettleseren tilgang til GPS-posisjonen din
@@ -108,32 +111,6 @@ Spillet har flere justerbare parametere:
 ### Ytelse
 - Mange spøkelser samtidig kan påvirke ytelsen på eldre enheter
 - Ved lav ytelse, reduser antall spøkelser eller synsrekkevidde
-
-## 📸 Screenshots
-
-### Spillopplevelse på mobil
-
-#### Velkomstskjerm
-Når du åpner spillet første gang, får du en introduksjon til spillmekanikken.
-
-![Velkomstskjerm](screenshots/01-welcome-screen.png)
-
-#### Startskjerm med kart
-Hovedskjermen viser kartet med grønn spilleområde-avgrensning og kontroller for å starte spillet.
-
-![Startskjerm](screenshots/02-start-screen.png)
-
-#### Innstillingsmeny
-Utvid innstillingsmenyen for å justere vanskelighetsgrad: antall spøkelser, hastighet, synsfelt (FOV) og synsrekkevidde.
-
-![Innstillinger](screenshots/04-settings-menu.png)
-
-#### Toppliste
-Se de beste spillerne og deres overlevelsestid. Hvis du havner på topp 10, kan du legge inn navnet ditt!
-
-![Toppliste](screenshots/05-leaderboard.png)
-
-*Merk: Skjermbildene viser grensesnittet i mobil visning (375x667 CSS-piksler, typisk iPhone 6/7/8 størrelse)*
 
 ## 🎯 Fremtidige forbedringer
 
