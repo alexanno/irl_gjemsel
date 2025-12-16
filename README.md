@@ -39,22 +39,20 @@ Prosjektet er bygget med følgende teknologier:
 
 ### Backend & Database
 - **Firebase Realtime Database** - Sanntids toppliste som synkroniserer mellom alle spillere
-- **Firebase Hosting** - Rask og pålitelig hosting med global CDN
+- **GitHub Pages** - Rask og pålitelig hosting av den statiske nettsiden
 
 ### Kartdata
 - **OpenStreetMap** - Gratis og åpne kartdata
 
 ## 🚀 Deployment
 
-Prosjektet er deployet via Firebase Hosting.
-
-For å deploye din egen versjon, konfigurer Firebase Hosting og oppdater Firebase-konfigurasjonen i `index.html`.
+Prosjektet er deployet via GitHub Pages.
 
 ### Deployment-prosess
-1. Firebase-konfigurasjonen er inkludert i `index.html`
-2. Prosjektet hostes som en statisk side
-3. Firebase Realtime Database håndterer topplisten
-4. Ingen build-steg nødvendig - deployer direkte
+1. Prosjektet hostes som en statisk side på GitHub Pages
+2. Firebase Realtime Database håndterer topplisten
+3. Firebase-konfigurasjonen er inkludert i `index.html`
+4. Ingen build-steg nødvendig - kun statiske filer
 
 ## ⚙️ Innstillinger
 
