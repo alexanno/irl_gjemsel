@@ -113,19 +113,27 @@ Spillet har flere justerbare parametere:
 
 ### Spillopplevelse på mobil
 
-#### Startskjerm med kart
-Når spillet starter, ser du kartet med din posisjon (blå prikk) og spilleområdet (grønn sirkel).
+#### Velkomstskjerm
+Når du åpner spillet første gang, får du en introduksjon til spillmekanikken.
 
-#### Under spillet
-Røde spøkelser med lyskjegler beveger seg rundt i kartet. Du må unngå å komme i synlinjene deres.
+![Velkomstskjerm](screenshots/01-welcome-screen.png)
+
+#### Startskjerm med kart
+Hovedskjermen viser kartet med grønn spilleområde-avgrensning og kontroller for å starte spillet.
+
+![Startskjerm](screenshots/02-start-screen.png)
+
+#### Innstillingsmeny
+Utvid innstillingsmenyen for å justere vanskelighetsgrad: antall spøkelser, hastighet, synsfelt (FOV) og synsrekkevidde.
+
+![Innstillinger](screenshots/04-settings-menu.png)
 
 #### Toppliste
 Se de beste spillerne og deres overlevelsestid. Hvis du havner på topp 10, kan du legge inn navnet ditt!
 
-#### Innstillingsmeny
-Juster vanskelighetsgrad ved å endre antall spøkelser, deres hastighet, synsfelt og rekkevidde.
+![Toppliste](screenshots/05-leaderboard.png)
 
-*Merk: For å se spillet i aksjon, åpne `index.html` i en nettleser med GPS-tilgang på en mobil enhet*
+*Merk: Skjermbildene viser grensesnittet i mobil visning (375x667 px)*
 
 ## 🎯 Fremtidige forbedringer
 
