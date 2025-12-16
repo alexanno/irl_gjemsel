@@ -133,7 +133,7 @@ Se de beste spillerne og deres overlevelsestid. Hvis du havner på topp 10, kan 
 
 ![Toppliste](screenshots/05-leaderboard.png)
 
-*Merk: Skjermbildene viser grensesnittet i mobil visning (375x667 px)*
+*Merk: Skjermbildene viser grensesnittet i mobil visning (375x667 CSS-piksler, typisk iPhone 6/7/8 størrelse)*
 
 ## 🎯 Fremtidige forbedringer
 
