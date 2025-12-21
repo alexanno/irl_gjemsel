@@ -1,5 +1,7 @@
 # 👻 IRL Gjemsel
 
+### https://alexanno.github.io/irl_gjemsel/
+
 **Et fysisk gjemselspill hvor du løper fra spøkelser i virkeligheten!**
 
 IRL Gjemsel er et nyskapende mobilspill som kombinerer kartelementer med fysisk aktivitet. Spillet bruker GPS-posisjoneringen din til å plassere deg på et kart, mens AI-styrte spøkelser prøver å finne deg. Du må faktisk bevege deg fysisk for å unngå å bli oppdaget!
