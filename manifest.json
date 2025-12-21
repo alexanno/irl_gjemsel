@@ -1,0 +1,41 @@
+{
+  "name": "IRL Gjemsel - Spøkelsesspill",
+  "short_name": "IRL Gjemsel",
+  "description": "Et AR-basert spøkelsesspill hvor du finner og fanger spøkelser i virkeligheten",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "theme_color": "#2b7",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["games"],
+  "shortcuts": [
+    {
+      "name": "Start Game",
+      "short_name": "Play",
+      "description": "Start a new game",
+      "url": "/?action=start",
+      "icons": [
+        {
+          "src": "/icons/icon-192x192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ]
+}

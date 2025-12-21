@@ -2,8 +2,19 @@
 <html lang="no">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>👻 IRL Gjemsel</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <title>👻 IRL Gjemsel</title>
+
+  <!-- PWA Meta Tags -->
+  <meta name="theme-color" content="#2b7"/>
+  <meta name="description" content="Et AR-basert spøkelsesspill hvor du finner og fanger spøkelser i virkeligheten"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="IRL Gjemsel"/>
+  <link rel="apple-touch-icon" href="/icons/icon-192x192.png"/>
+  <link rel="manifest" href="/manifest.json"/>
+  <link rel="icon" type="image/png" href="/icons/icon-192x192.png"/>
 
   <!-- Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -303,11 +314,135 @@
     #welcome-modal button:hover {
       background: #1a6;
     }
+
+    /* Install Button Styles */
+    #installBtn {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      z-index: 999;
+      padding: 12px 20px;
+      background: linear-gradient(135deg, #2b7, #1a5);
+      color: white;
+      border: none;
+      border-radius: 24px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      display: none;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.3s ease;
+    }
+    #installBtn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+    }
+    #installBtn:active {
+      transform: translateY(0);
+    }
+    #installBtn.show {
+      display: flex;
+    }
+
+    /* Install Modal Styles */
+    #installModal {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      padding: 30px;
+      border-radius: 16px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+      z-index: 2001;
+      display: none;
+      max-width: 90%;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    #installModal.show {
+      display: block;
+    }
+    #installModal h3 {
+      margin: 0 0 15px;
+      font-size: 20px;
+      color: #333;
+    }
+    #installModal p {
+      margin: 0 0 20px;
+      color: #666;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    #installModal .button-group {
+      display: flex;
+      gap: 10px;
+      margin-top: 25px;
+    }
+    #installModal button {
+      flex: 1;
+      padding: 12px 16px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+    #installModal .btn-install {
+      background: #2b7;
+      color: white;
+    }
+    #installModal .btn-install:hover {
+      background: #1a6;
+    }
+    #installModal .btn-cancel {
+      background: #f0f0f0;
+      color: #333;
+    }
+    #installModal .btn-cancel:hover {
+      background: #e0e0e0;
+    }
+    #installModalOverlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 2000;
+      display: none;
+    }
+    #installModalOverlay.show {
+      display: block;
+    }
   </style>
 </head>
 <body>
   <div id="map"></div>
   <div id="overlay"></div>
+
+  <!-- Install Button -->
+  <button id="installBtn" title="Installer appen">
+    <span>📲</span>
+    <span>Installer app</span>
+  </button>
+
+  <!-- Install Modal -->
+  <div id="installModalOverlay"></div>
+  <div id="installModal">
+    <h3>📲 Installer IRL Gjemsel</h3>
+    <p>Installer appen på din enhet for å få enklere tilgang og bedre opplevelse.</p>
+    <div class="button-group">
+      <button class="btn-install" id="confirmInstall">Installer</button>
+      <button class="btn-cancel" id="cancelInstall">Avbryt</button>
+    </div>
+  </div>
+
   <div id="hud" class="min">
     <button id="toggleHud" title="Minimer/utvid">⚙️</button>
     <h1>IRL Spøkelsesspill 👻</h1>
@@ -1277,6 +1412,99 @@
 
   // Init status
   setStatus('Klar til start!');
+})();
+
+// ==================== PWA Install Logic ====================
+(function() {
+  let deferredPrompt;
+  const installBtn = document.getElementById('installBtn');
+  const installModal = document.getElementById('installModal');
+  const installModalOverlay = document.getElementById('installModalOverlay');
+  const confirmInstall = document.getElementById('confirmInstall');
+  const cancelInstall = document.getElementById('cancelInstall');
+
+  // Register Service Worker
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').then(registration => {
+        console.log('Service Worker registered successfully:', registration);
+      }).catch(error => {
+        console.log('Service Worker registration failed:', error);
+      });
+    });
+  }
+
+  // Listen for beforeinstallprompt event
+  window.addEventListener('beforeinstallprompt', (e) => {
+    // Prevent the mini-infobar from appearing on mobile
+    e.preventDefault();
+    // Store the event for later use
+    deferredPrompt = e;
+    // Show the install button
+    installBtn.classList.add('show');
+  });
+
+  // Listen for app installed event
+  window.addEventListener('appinstalled', () => {
+    console.log('PWA was installed');
+    installBtn.classList.remove('show');
+    deferredPrompt = null;
+  });
+
+  // Install button click handler
+  installBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    if (!deferredPrompt) {
+      return;
+    }
+    // Show the install modal
+    showInstallModal();
+  });
+
+  // Confirm install
+  confirmInstall.addEventListener('click', () => {
+    if (!deferredPrompt) {
+      hideInstallModal();
+      return;
+    }
+    // Show the install prompt
+    deferredPrompt.prompt();
+    // Log the result
+    deferredPrompt.userChoice.then((choiceResult) => {
+      if (choiceResult.outcome === 'accepted') {
+        console.log('User accepted the install prompt');
+      } else {
+        console.log('User dismissed the install prompt');
+      }
+      deferredPrompt = null;
+      hideInstallModal();
+    });
+  });
+
+  // Cancel install
+  cancelInstall.addEventListener('click', () => {
+    hideInstallModal();
+  });
+
+  // Close modal when clicking overlay
+  installModalOverlay.addEventListener('click', () => {
+    hideInstallModal();
+  });
+
+  function showInstallModal() {
+    installModal.classList.add('show');
+    installModalOverlay.classList.add('show');
+  }
+
+  function hideInstallModal() {
+    installModal.classList.remove('show');
+    installModalOverlay.classList.remove('show');
+  }
+
+  // Check if app is already installed (for iOS)
+  if (window.navigator.standalone === true) {
+    installBtn.classList.remove('show');
+  }
 })();
 </script>
 </body>
