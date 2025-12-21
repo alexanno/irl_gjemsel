@@ -4,8 +4,7 @@
 
 IRL Gjemsel er et nyskapende mobilspill som kombinerer kartelementer med fysisk aktivitet. Spillet bruker GPS-posisjoneringen din til å plassere deg på et kart, mens AI-styrte spøkelser prøver å finne deg. Du må faktisk bevege deg fysisk for å unngå å bli oppdaget!
 
-![alt text](image.png) 
-![alt text](image-1.png)
+![alt text](screenshots.png) 
 
 ## 🎮 Hvordan det fungerer
 
