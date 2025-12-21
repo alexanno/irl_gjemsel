@@ -1,24 +1,23 @@
 // Service Worker for IRL Gjemsel PWA
 const CACHE_NAME = 'irl-gjemsel-v1';
+const BASE_URL = self.registration.scope;
+const OFFLINE_FALLBACK = `${BASE_URL}index.html`;
 const urlsToCache = [
-  '/',
-  '/index.html',
-  '/manifest.json'
+  BASE_URL,
+  `${BASE_URL}index.html`,
+  `${BASE_URL}manifest.json`
 ];
 
 // Install event
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => {
-        return cache.addAll(urlsToCache).catch(err => {
-          console.warn('Cache addAll error:', err);
-          // Continue even if some resources fail
-        });
+      .then(cache => cache.addAll(urlsToCache))
+      .then(() => self.skipWaiting())
+      .catch(err => {
+        console.error('Cache install error:', err);
       })
-      .catch(err => console.error('Cache open error:', err))
   );
-  self.skipWaiting();
 });
 
 // Activate event
@@ -39,42 +38,56 @@ self.addEventListener('activate', event => {
 
 // Fetch event - Network first, fallback to cache
 self.addEventListener('fetch', event => {
+  const { request } = event;
+  
   // Skip non-GET requests
-  if (event.request.method !== 'GET') {
+  if (request.method !== 'GET') {
     return;
   }
 
-  // Skip external resources and APIs
-  const url = new URL(event.request.url);
-  if (url.origin !== self.location.origin && 
-      !url.hostname.includes('unpkg.com') &&
-      !url.hostname.includes('gstatic.com') &&
-      !url.hostname.includes('googleapis.com') &&
-      !event.request.url.includes('firebase')) {
+  const url = new URL(request.url);
+
+  // Handle navigation requests (page loads)
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then(response => response)
+        .catch(() => caches.match(OFFLINE_FALLBACK))
+    );
     return;
   }
 
-  event.respondWith(
-    fetch(event.request)
-      .then(response => {
-        // Don't cache non-successful responses
-        if (!response || response.status !== 200 || response.type === 'error') {
+  // For external CDN resources (Leaflet, Firebase, etc.) - network first
+  if (url.origin !== self.location.origin) {
+    event.respondWith(
+      fetch(request)
+        .then(response => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(request, clone));
+          }
           return response;
-        }
+        })
+        .catch(() => caches.match(request))
+    );
+    return;
+  }
 
-        // Cache successful responses
-        const responseToCache = response.clone();
-        caches.open(CACHE_NAME).then(cache => {
-          cache.put(event.request, responseToCache);
-        });
-
-        return response;
-      })
-      .catch(() => {
-        // Return cached version on network error
-        return caches.match(event.request)
-          .then(response => response || caches.match('/index.html'));
-      })
+  // App shell and local assets - cache first, then network
+  event.respondWith(
+    caches.match(request).then(cached => {
+      if (cached) return cached;
+      
+      return fetch(request)
+        .then(response => {
+          if (response.ok && response.type === 'basic') {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(OFFLINE_FALLBACK));
+    })
   );
 });
 
