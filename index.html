@@ -628,11 +628,14 @@
   const defaultZoom = 19;
 
   // --- Kart ---
+  //const tileurl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+  //const tileurl = 'https://cache.kartverket.no/v1/wmts/1.0.0/topo/default/webmercator/{z}/{y}/{x}.png'
+  const tileurl = 'https://cache.kartverket.no/v1/wmts/1.0.0/topograatone/default/webmercator/{z}/{y}/{x}.png'
   const map = L.map('map', { zoomControl: true });
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
+  L.tileLayer(tileurl, {
+    maxZoom: 18,
     minZoom: 1,
-    attribution: '&copy; OpenStreetMap contributors, ∀x'
+    attribution: '&copy; Kartverket, ∀x'
   }).addTo(map);
   map.setView([58.1467, 7.9956], defaultZoom); // Kristiansand
 
