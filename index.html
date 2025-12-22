@@ -16,11 +16,9 @@
   <link rel="manifest" href="./manifest.json"/>
   <link rel="icon" type="image/png" href="./icons/icon-192x192.png"/>
 
-  <!-- Leaflet -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <!-- MapLibre GL JS -->
+    <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" />
+    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
 
   <!-- Turf.js -->
   <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
@@ -561,41 +559,34 @@
   }
 
   function loadLeaderboard() {
-    leaderboardRef.orderByChild('time').limitToLast(5).once('value', snapshot => { // Changed to limitToLast to get highest values
+    leaderboardRef.orderByChild('time').limitToLast(5).once('value', snapshot => {
       const scores = [];
       snapshot.forEach(childSnapshot => {
         scores.push(childSnapshot.val());
       });
-      scores.sort((a, b) => b.time - a.time); // Sort by longest time first
+      scores.sort((a, b) => b.time - a.time);
       updateLeaderboardDisplay(scores);
     });
   }
 
   async function checkHighScore(time, ghostCount) {
-    const snapshot = await leaderboardRef.orderByChild('time').limitToFirst(1).once('value');
     let isTop10 = false;
-    let scores = [];
-    
+    const scores = [];
     await leaderboardRef.orderByChild('time').once('value', snapshot => {
       snapshot.forEach(childSnapshot => {
         scores.push(childSnapshot.val());
       });
     });
-    
-    scores.sort((a, b) => b.time - a.time); // Sort by longest time first
-    
-    if (scores.length < 10 || time > scores[9].time) { // Changed condition to check for longer time
+    scores.sort((a, b) => b.time - a.time);
+    if (scores.length < 10 || time > scores[9].time) {
       isTop10 = true;
     }
-    
     if (isTop10) {
       return new Promise((resolve) => {
         const modal = document.getElementById('nickname-modal');
         const input = document.getElementById('nickname-input');
         const saveBtn = document.getElementById('save-nickname');
-        
         modal.style.display = 'block';
-        
         saveBtn.onclick = () => {
           const playerName = input.value.trim();
           if (playerName) {
@@ -626,18 +617,112 @@
   });
 
   const defaultZoom = 19;
+  const defaultCenter = { lat: 58.1467, lng: 7.9956 };
 
-  // --- Kart ---
-  //const tileurl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-  //const tileurl = 'https://cache.kartverket.no/v1/wmts/1.0.0/topo/default/webmercator/{z}/{y}/{x}.png'
-  const tileurl = 'https://cache.kartverket.no/v1/wmts/1.0.0/topograatone/default/webmercator/{z}/{y}/{x}.png'
-  const map = L.map('map', { zoomControl: true });
-  L.tileLayer(tileurl, {
-    maxZoom: 18,
-    minZoom: 1,
-    attribution: '&copy; Kartverket, ∀x'
-  }).addTo(map);
-  map.setView([58.1467, 7.9956], defaultZoom); // Kristiansand
+  // --- Kart (MapLibre vector, OpenFreeMap) ---
+  const map = new maplibregl.Map({
+    container: 'map',
+    style: 'https://tiles.openfreemap.org/styles/liberty',
+    center: [defaultCenter.lng, defaultCenter.lat],
+    zoom: defaultZoom,
+    attributionControl: true
+  });
+  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
+
+  let mapReady = false;
+  const boundarySourceData = { type: 'FeatureCollection', features: [] };
+  const playerSourceData = { type: 'FeatureCollection', features: [] };
+  const ghostSourceData = { type: 'FeatureCollection', features: [] };
+  const obstacleSourceData = { type: 'FeatureCollection', features: [] };
+
+  function refreshSource(name, data) {
+    if (!mapReady) return;
+    const src = map.getSource(name);
+    if (src) src.setData(data);
+  }
+
+  function ensureSources() {
+    if (!mapReady) return;
+
+    if (!map.getSource('boundary')) {
+      map.addSource('boundary', { type: 'geojson', data: boundarySourceData });
+      map.addLayer({
+        id: 'boundary-fill',
+        type: 'fill',
+        source: 'boundary',
+        paint: { 'fill-color': '#2a2', 'fill-opacity': 0.06 }
+      });
+      map.addLayer({
+        id: 'boundary-line',
+        type: 'line',
+        source: 'boundary',
+        paint: { 'line-color': '#2a2', 'line-width': 2 }
+      });
+    }
+
+    if (!map.getSource('player')) {
+      map.addSource('player', { type: 'geojson', data: playerSourceData });
+      map.addLayer({
+        id: 'player-accuracy',
+        type: 'fill',
+        source: 'player',
+        filter: ['==', ['get', 'kind'], 'accuracy'],
+        paint: { 'fill-color': '#39f', 'fill-opacity': 0.08 }
+      });
+      map.addLayer({
+        id: 'player-marker',
+        type: 'circle',
+        source: 'player',
+        filter: ['==', ['get', 'kind'], 'player'],
+        paint: {
+          'circle-radius': 7,
+          'circle-color': '#9cf',
+          'circle-stroke-color': '#06f',
+          'circle-stroke-width': 2
+        }
+      });
+    }
+
+    if (!map.getSource('ghosts')) {
+      map.addSource('ghosts', { type: 'geojson', data: ghostSourceData });
+      map.addLayer({
+        id: 'ghost-cones',
+        type: 'fill',
+        source: 'ghosts',
+        filter: ['==', ['get', 'kind'], 'cone'],
+        paint: {
+          'fill-color': '#fcc',
+          'fill-opacity': 0.15,
+          'fill-outline-color': '#c44'
+        }
+      });
+      map.addLayer({
+        id: 'ghost-markers',
+        type: 'circle',
+        source: 'ghosts',
+        filter: ['==', ['get', 'kind'], 'ghost'],
+        paint: {
+          'circle-radius': 6,
+          'circle-color': '#f66',
+          'circle-stroke-color': '#222',
+          'circle-stroke-width': 2
+        }
+      });
+    }
+
+    if (!map.getSource('obstacles')) {
+      map.addSource('obstacles', { type: 'geojson', data: obstacleSourceData });
+    }
+  }
+
+  map.on('load', () => {
+    mapReady = true;
+    ensureSources();
+    refreshSource('boundary', boundarySourceData);
+    refreshSource('player', playerSourceData);
+    refreshSource('ghosts', ghostSourceData);
+    refreshSource('obstacles', obstacleSourceData);
+  });
 
   // UI
   const $ = (id)=>document.getElementById(id);
@@ -649,7 +734,6 @@
 
   toggleHud.addEventListener('click', ()=>{
     hud.classList.toggle('min');
-    //toggleHud.textContent = hud.classList.contains('min') ? '+' : '−';
   });
 
   const STATE={IDLE:'idle', COUNTDOWN:'countdown', RUNNING:'running', CAUGHT:'caught'};
@@ -662,16 +746,15 @@
   };
 
   // Geometri
-  let boundaryLayer=null, boundaryPoly=null; // Turf (Polygon/MultiPolygon)
+  let boundaryPoly=null; // Turf (Polygon/MultiPolygon)
   let boundaryIsCircle=false; // spesiell håndtering (radius/center)
   let boundaryCircleCenter=null, boundaryCircleRadiusM=100; // default radius
   let originalBoundaryGeom=null; // for krymp-logikk
 
-  let obstaclesLayer=null; // Leaflet group
   let obstaclesPolys=[];   // Turf Polygon/MultiPolygon
 
   // Spiller
-  let playerMarker=null, playerAccuracy=null, playerLatLng=null;
+  let playerLatLng=null;
 
   // Spøkelser
   const ghosts=[];
@@ -682,7 +765,7 @@
   const bearingTo=(from,to)=>turf.bearing([from.lng,from.lat],[to.lng,to.lat]);
   const moveFrom=(ll, bearingDeg, meters)=>{
     const d=turf.destination([ll.lng,ll.lat], meters/1000, bearingDeg, {units:'kilometers'});
-    const [lng,lat]=d.geometry.coordinates; return L.latLng(lat,lng);
+    const [lng,lat]=d.geometry.coordinates; return {lat, lng};
   };
   const pointInside=(poly,ll)=>turf.booleanPointInPolygon([ll.lng,ll.lat], poly);
   const lineWithin=(poly,a,b)=>{
@@ -691,17 +774,12 @@
   };
   const lineIntersectsAnyObstacle=(a,b)=>{
     if (!obstaclesPolys.length) return false;
-    // Create a short buffer around the line to ensure reliable intersection detection
     const line = turf.lineString([[a.lng,a.lat], [b.lng,b.lat]]);
-    const bufferedLine = turf.buffer(line, 0.001, {units: 'kilometers'}); // 1m buffer
+    const bufferedLine = turf.buffer(line, 0.001, {units: 'kilometers'}); // ~1m buffer
     for (const poly of obstaclesPolys) {
       try {
-        // Check if the buffered line intersects the obstacle
-        if (turf.booleanIntersects(bufferedLine, poly)) {
-          return true;
-        }
+        if (turf.booleanIntersects(bufferedLine, poly)) return true;
       } catch(e){
-        // If there's an error, assume there is an intersection to be safe
         return true;
       }
     }
@@ -722,11 +800,17 @@
     clearTimeout(flashWarn._t);
     flashWarn._t = setTimeout(()=> warnEl.style.display='none', 1200);
   }
- 
+
   // --- Boundary ---
   function drawBoundary(poly){
-    if (boundaryLayer){ map.removeLayer(boundaryLayer); }
-    boundaryLayer=L.geoJSON(poly,{ style:{color:'#2a2',weight:2,fillOpacity:.06,fillColor:'#5f5'} }).addTo(map);
+    boundarySourceData.features = [];
+    if (poly) {
+      const geom = poly.geometry ? poly.geometry : poly;
+      if (geom) {
+        boundarySourceData.features.push({ type: 'Feature', properties: { kind: 'boundary' }, geometry: geom });
+      }
+    }
+    refreshSource('boundary', boundarySourceData);
   }
   function setBoundary(poly, isCircle=false){
     boundaryPoly=poly;
@@ -735,14 +819,16 @@
     drawBoundary(poly);
     try { 
       const center = turf.center(boundaryPoly);
-      map.setView([center.geometry.coordinates[1], center.geometry.coordinates[0]], defaultZoom);
+      map.setCenter([center.geometry.coordinates[0], center.geometry.coordinates[1]]);
+      map.setZoom(defaultZoom);
     } catch (e){}
   }
   function ensureDefaultBoundary(center){
     const c=center||map.getCenter();
-    boundaryCircleCenter = L.latLng(c.lat, c.lng);
-    boundaryCircleRadiusM = 200; // ← 500 m default
-    const circle=turf.circle([c.lng,c.lat], boundaryCircleRadiusM/1000, {units:'kilometers',steps:64});
+    const llCenter = { lat: c.lat, lng: c.lng };
+    boundaryCircleCenter = llCenter;
+    boundaryCircleRadiusM = 200;
+    const circle=turf.circle([llCenter.lng,llCenter.lat], boundaryCircleRadiusM/1000, {units:'kilometers',steps:64});
     setBoundary(circle, true);
   }
   function shrinkBoundaryTo80(){
@@ -750,31 +836,24 @@
     Game.shrunk = true;
 
     if (boundaryIsCircle && boundaryCircleCenter){
-      boundaryCircleRadiusM = boundaryCircleRadiusM * 0.8; // 80% radius
+      boundaryCircleRadiusM = boundaryCircleRadiusM * 0.8;
       const circle=turf.circle([boundaryCircleCenter.lng,boundaryCircleCenter.lat], boundaryCircleRadiusM/1000, {units:'kilometers',steps:64});
       boundaryPoly = circle;
       drawBoundary(circle);
 
-      // Move ghosts inside the new boundary if they're outside
       for (const ghost of ghosts) {
         if (!pointInside(boundaryPoly, ghost.latlng)) {
-          // Calculate vector from center to ghost
           const bearing = bearingTo(boundaryCircleCenter, ghost.latlng);
-          // Place ghost at 80% of the new radius
           const safeDistance = boundaryCircleRadiusM * 0.8;
           const newPos = moveFrom(boundaryCircleCenter, bearing, safeDistance);
-          // Update ghost position
-          ghost.latlng = newPos;
-          ghost.marker.setLatLng(newPos);
-          ghost.cone.setLatLngs(ghost.computeCone());
+          ghost.updatePosition(newPos);
         }
       }
-      
       setStatus('Område krympet til 80% av størrelsen. Spøkelser flyttet innfor nytt område.');
       return;
     }
-    // Polygon: skaler mot centroid slik at arealet ~80% (skalafaktor sqrt(0.8))
-    const scale = Math.sqrt(0.8); // ≈ 0.894427
+
+    const scale = Math.sqrt(0.8);
     const centroid = turf.centroid(boundaryPoly).geometry.coordinates;
     function scaleCoords(coords){
       return coords.map(ring => ring.map(([lng,lat])=>{
@@ -796,19 +875,14 @@
       boundaryPoly = newPoly;
       drawBoundary(newPoly);
 
-      // Move ghosts inside the new boundary if they're outside
       const center = turf.centroid(newPoly).geometry.coordinates;
-      const centerLL = L.latLng(center[1], center[0]);
+      const centerLL = { lat: center[1], lng: center[0] };
       
       for (const ghost of ghosts) {
         if (!pointInside(boundaryPoly, ghost.latlng)) {
-          // Calculate bearing from center to ghost
           const bearing = bearingTo(centerLL, ghost.latlng);
-          
-          // Try different distances from center until we find a valid position
           const maxDist = 100; // meters
           let newPos = null;
-          
           for (let dist = maxDist; dist >= 10; dist -= 5) {
             const tryPos = moveFrom(centerLL, bearing, dist);
             if (pointInside(boundaryPoly, tryPos) && !pointInsideAnyObstacle(tryPos)) {
@@ -816,21 +890,14 @@
               break;
             }
           }
-          
           if (newPos) {
-            // Update ghost position
-            ghost.latlng = newPos;
-            ghost.marker.setLatLng(newPos);
-            ghost.cone.setLatLngs(ghost.computeCone());
+            ghost.updatePosition(newPos);
           }
         }
       }
-      
       setStatus('Område krympet til 80% av størrelsen. Spøkelser flyttet innfor nytt område.');
     }
   }
-
-  // Obstacle logic removed
 
   // --- Filinnlasting ---
   function readGeoJSONFile(file, onJSON){
@@ -841,7 +908,6 @@
   fileBoundary.addEventListener('change',(e)=>{
     const f=e.target.files && e.target.files[0]; if (!f) return;
     readGeoJSONFile(f, (gj)=>{
-      // Finn polygon/multipolygon
       let poly=null;
       if (gj.type==='FeatureCollection'){
         for(const ft of gj.features){
@@ -865,41 +931,44 @@
   // --- Spiller & posisjonsvalidering ---
   function canMove(fromLL, toLL){
     if (!boundaryPoly) return true;
-    // må være inne i boundary
     if (!pointInside(boundaryPoly, toLL)) return false;
-    if (fromLL){ // sjekk linje-kryssing kun hvis vi har forrige pos
-      // linjen må ligge i boundary
+    if (fromLL){
       if (!lineWithin(boundaryPoly, fromLL, toLL)) return false;
     }
     return true;
   }
+
+  function updatePlayerFeatures(ll, acc){
+    const features=[];
+    if (ll){
+      if (acc){
+        const accCircle = turf.circle([ll.lng,ll.lat], (acc||10)/1000, {units:'kilometers', steps:64});
+        features.push({ type:'Feature', properties:{kind:'accuracy'}, geometry: accCircle.geometry });
+      }
+      features.push({ type:'Feature', properties:{kind:'player'}, geometry:{ type:'Point', coordinates:[ll.lng, ll.lat] }});
+    }
+    playerSourceData.features = features;
+    refreshSource('player', playerSourceData);
+  }
+
   function ensurePlayer(ll, acc){
-    // valider bevegelse
     if (playerLatLng && !canMove(playerLatLng, ll)){
       flashWarn('Ugyldig bevegelse (utenfor område).');
-      return; // ignorer
+      return;
     }
-    if (!playerLatLng){ // første posisjon
-      if (boundaryPoly && !pointInside(boundaryPoly, ll)){ flashWarn('Utenfor område.'); return; }
+    if (!playerLatLng && boundaryPoly && !pointInside(boundaryPoly, ll)){
+      flashWarn('Utenfor område.');
+      return;
     }
     playerLatLng=ll;
-    if (!playerMarker){
-      playerMarker=L.circleMarker(ll,{radius:7,weight:2,color:'#06f',fillColor:'#9cf',fillOpacity:.8}).addTo(map).bindTooltip('Du');
-    } else playerMarker.setLatLng(ll);
-    if (!playerAccuracy){
-      playerAccuracy=L.circle(ll,{radius:acc||10,color:'#39f',weight:1,fillOpacity:.08}).addTo(map);
-    } else {
-      playerAccuracy.setLatLng(ll);
-      if (acc) playerAccuracy.setRadius(acc);
-    }
+    updatePlayerFeatures(ll, acc||10);
   }
 
   if ("geolocation" in navigator){
     Game.watcher=navigator.geolocation.watchPosition(pos=>{
       const {latitude:lat, longitude:lng, accuracy}=pos.coords;
-      const ll=L.latLng(lat,lng);
-      if (!boundaryPoly) ensureDefaultBoundary(ll); // 500 m sirkel
-      // forsøk å flytte – hvis ugyldig, ignorer
+      const ll={lat,lng};
+      if (!boundaryPoly) ensureDefaultBoundary(ll);
       const before = playerLatLng;
       ensurePlayer(ll, accuracy||10);
       if (!playerLatLng && before){ /* do nothing */ }
@@ -911,15 +980,21 @@
     setStatus('Ingen geolokasjon. Trykk i kartet for å sette posisjon.');
     ensureDefaultBoundary(map.getCenter());
   }
-  /*
-  map.on('click', e=>{
-    if (!boundaryPoly) ensureDefaultBoundary(e.latlng); // første gang
-    ensurePlayer(e.latlng, 5);
-  });
-  */
+
   // --- Spøkelse ---
+  function ghostConePolygon(points){
+    const coords = points.map(p => [p.lng, p.lat]);
+    if (coords.length) coords.push(coords[0]);
+    return { type:'Polygon', coordinates:[coords] };
+  }
+
+  function refreshGhostSource(){
+    refreshSource('ghosts', ghostSourceData);
+  }
+
   class Ghost{
     constructor(ll, opts){
+      this.id=`ghost-${Date.now()}-${Math.random().toString(16).slice(2,6)}`;
       this.latlng=ll;
       this.heading=Math.random()*360;
       this.speed=opts.speed||4.2;
@@ -931,8 +1006,20 @@
       this.searchUntil=0;
       this.patrolTarget=this.pickPatrolTarget();
       this.patrolRecalcAt=Date.now()+8000+Math.random()*4000;
-      this.marker=L.circleMarker(ll,{radius:6,weight:2,color:'#222',fillColor:'#f66',fillOpacity:.9}).addTo(map);
-      this.cone=L.polygon(this.computeCone(),{weight:1,color:'#c44',fillColor:'#fcc',fillOpacity:.15}).addTo(map);
+
+      this.markerFeature={
+        type:'Feature',
+        properties:{kind:'ghost', id:this.id},
+        geometry:{ type:'Point', coordinates:[ll.lng, ll.lat] }
+      };
+      const coneGeom = ghostConePolygon(this.computeCone());
+      this.coneFeature={
+        type:'Feature',
+        properties:{kind:'cone', id:`cone-${this.id}`},
+        geometry: coneGeom
+      };
+      ghostSourceData.features.push(this.markerFeature, this.coneFeature);
+      refreshGhostSource();
     }
     pickPatrolTarget(){
       if (!boundaryPoly) return null;
@@ -941,72 +1028,55 @@
         const rnd=turf.randomPoint(1,{bbox:bb}).features[0];
         if (!turf.booleanPointInPolygon(rnd, boundaryPoly)) continue;
         const [lng,lat]=rnd.geometry.coordinates;
-        const ll=L.latLng(lat,lng);
+        const ll={lat,lng};
         if (pointInsideAnyObstacle(ll)) continue;
         return ll;
       }
       const c=turf.centroid(boundaryPoly).geometry.coordinates;
-      return L.latLng(c[1], c[0]);
+      return {lat:c[1], lng:c[0]};
     }
     computeCone(){
-      // Normalize heading to [0, 360)
       const normalizedHeading = ((this.heading % 360) + 360) % 360;
-      
-      // Calculate the exact angles for the cone edges
       const leftAngle = normalizedHeading - this.fov/2;
       const rightAngle = normalizedHeading + this.fov/2;
-      
-      // Create cone points with multiple segments for smoother edges
       const points = [this.latlng];
-      const segments = 8; // Number of segments for the arc
-      
+      const segments = 8;
       for (let i = 0; i <= segments; i++) {
         const angle = leftAngle + (rightAngle - leftAngle) * (i / segments);
         points.push(moveFrom(this.latlng, angle, this.viewDist));
       }
-      
       return points;
+    }
+    updateFeatures(){
+      this.markerFeature.geometry.coordinates = [this.latlng.lng, this.latlng.lat];
+      this.coneFeature.geometry = ghostConePolygon(this.computeCone());
+      refreshGhostSource();
+    }
+    updatePosition(ll){
+      this.latlng = ll;
+      this.updateFeatures();
     }
     seesPlayer(playerLL){
       if (!playerLL) return false;
-      
-      // 1. Proximity check - immediate catch if very close
       const distance = metersBetween(this.latlng, playerLL);
       if (distance <= this.proximity) return true;
-      
-      // 2. Distance check - too far to see
       if (distance > this.viewDist) return false;
-      
-      // 3. Field of view check - is player in view cone
       const bearing = bearingTo(this.latlng, playerLL);
-      // Normalize both angles to [0, 360) range first
       const normalizedHeading = ((this.heading % 360) + 360) % 360;
       const normalizedBearing = ((bearing % 360) + 360) % 360;
-      
-      // Calculate the smallest angle between the two directions
       let angleDiff = Math.abs(normalizedBearing - normalizedHeading);
-      if (angleDiff > 180) {
-          angleDiff = 360 - angleDiff;
-      }
-      
-      // Strict FOV check
+      if (angleDiff > 180) angleDiff = 360 - angleDiff;
       const halfFOV = this.fov / 2;
       if (angleDiff > halfFOV) return false;
-      
-      // 4. Line of sight check - no obstacles in the way
-      // Do the line check only if we passed the angle check
       if (lineIntersectsAnyObstacle(this.latlng, playerLL)) return false;
-      
-      // 5. Boundary check - line of sight within boundary
       if (boundaryPoly && !lineWithin(boundaryPoly, this.latlng, playerLL)) return false;
-      
       return true;
     }
     steer(dt, playerLL, allGhosts){
       const now=Date.now();
       const sees=this.seesPlayer(playerLL);
       if (sees){
-        const snapshot=L.latLng(playerLL.lat, playerLL.lng);
+        const snapshot={lat:playerLL.lat, lng:playerLL.lng};
         this.mode='chase';
         this.lastSeenTarget=snapshot;
         this.searchUntil=now+6000;
@@ -1033,7 +1103,7 @@
         this.heading=clampHeadingDiff(this.heading, desiredHeading, 160*dt);
       } else if (this.mode==='search' && this.lastSeenTarget){
         desiredHeading=bearingTo(this.latlng, this.lastSeenTarget);
-        const sweep=Math.sin(now/500)*35; // gentle oscillation while searching
+        const sweep=Math.sin(now/500)*35;
         desiredHeading=(desiredHeading+sweep+360)%360;
         moveSpeed=this.speed*0.75;
         this.heading=clampHeadingDiff(this.heading, desiredHeading, 100*dt);
@@ -1053,7 +1123,6 @@
           desiredHeading=bearingTo(this.latlng, this.patrolTarget);
         }
         this.heading=clampHeadingDiff(this.heading, desiredHeading, 60*dt);
-        // If the patrol segment would leave the boundary, pick a new target immediately
         const probe=moveFrom(this.latlng, this.heading, this.speed*dt*2);
         if (boundaryPoly && (!pointInside(boundaryPoly, probe) || !lineWithin(boundaryPoly, this.latlng, probe))){
           this.patrolTarget=this.pickPatrolTarget();
@@ -1107,31 +1176,15 @@
         }
       }
       this.latlng=next;
-      this.marker.setLatLng(this.latlng);
-      this.cone.setLatLngs(this.computeCone());
+      this.updateFeatures();
     }
   }
 
   // --- Spillkontroll ---
   function clearGhosts(){
     ghosts.splice(0,ghosts.length);
-    map.eachLayer(l=>{
-      const isPlayer=(playerMarker && l===playerMarker) || (playerAccuracy && l===playerAccuracy);
-      const isBoundary=(l===boundaryLayer);
-      const isObstacleGroup=(l===obstaclesLayer);
-      if (l instanceof L.CircleMarker || (l instanceof L.Polygon && l!==boundaryLayer)){
-        if (!isPlayer && !isBoundary && !isObstacleGroup) map.removeLayer(l);
-      }
-    });
-    if (playerMarker && !map.hasLayer(playerMarker)) playerMarker.addTo(map);
-    if (playerAccuracy && !map.hasLayer(playerAccuracy)) playerAccuracy.addTo(map);
-    if (boundaryLayer && !map.hasLayer(boundaryLayer)) boundaryLayer.addTo(map);
-    if (obstaclesLayer && !map.hasLayer(obstaclesLayer)) obstaclesLayer.addTo(map);
-
-    // Sørg for at boundaryLayer alltid er synlig
-    if (boundaryLayer && !map.hasLayer(boundaryLayer)) {
-      boundaryLayer.addTo(map);
-    }
+    ghostSourceData.features = [];
+    refreshGhostSource();
   }
 
   function startStopwatch(){
@@ -1144,33 +1197,29 @@
       const m = Math.floor(s/60);
       const ss = (s%60).toString().padStart(2,'0');
       stopwatchEl.textContent = `⏱️ ${m}:${ss}`;
-      // Krympetid i sekunder (kan endres som spillvariabel)
       const shrinkTime = Game.shrinkTimeSec || 120;
-      if (!Game.shrunk && s >= shrinkTime) { // 2 minutter eller valgt tid
+      if (!Game.shrunk && s >= shrinkTime) {
         shrinkBoundaryTo80();
-        // hvis spiller havner utenfor etter krymp -> flytt tilbake mot sentrum et lite steg
         if (playerLatLng && !pointInside(boundaryPoly, playerLatLng)) {
           flashWarn('Området krympet! Du var utenfor – flyt tilbake.');
-          // flytt et hakk mot sentrum
           let centerLL;
           if (boundaryIsCircle && boundaryCircleCenter) centerLL = boundaryCircleCenter;
           else {
-        const c = turf.centroid(boundaryPoly).geometry.coordinates;
-        centerLL = L.latLng(c[1], c[0]);
+            const c = turf.centroid(boundaryPoly).geometry.coordinates;
+            centerLL = {lat:c[1], lng:c[0]};
           }
           const br = bearingTo(playerLatLng, centerLL);
-          const step = 3; // meter
+          const step = 3;
           let tmp = playerLatLng;
           for (let i = 0; i < 60 && !pointInside(boundaryPoly, tmp); i++) {
-        tmp = moveFrom(tmp, br, step);
+            tmp = moveFrom(tmp, br, step);
           }
-          // kun sett hvis ikke i hindring og line-of-sight fra original pos ikke krysser hindring
           if (
-        !pointInsideAnyObstacle(tmp) &&
-        lineWithin(boundaryPoly, playerLatLng, tmp) &&
-        !lineIntersectsAnyObstacle(playerLatLng, tmp)
+            !pointInsideAnyObstacle(tmp) &&
+            lineWithin(boundaryPoly, playerLatLng, tmp) &&
+            !lineIntersectsAnyObstacle(playerLatLng, tmp)
           ) {
-        ensurePlayer(tmp, null);
+            ensurePlayer(tmp, null);
           }
         }
       }
@@ -1184,7 +1233,7 @@
     stopwatchEl.style.display='none';
   }
 
-    function spawnGhost(options) {
+  function spawnGhost(options) {
     if (!boundaryPoly) return null;
     const bb = turf.bbox(boundaryPoly);
     let tries = 0;
@@ -1193,8 +1242,7 @@
       const rnd = turf.randomPoint(1, { bbox: bb }).features[0];
       if (!turf.booleanPointInPolygon(rnd, boundaryPoly)) continue;
       const [lng, lat] = rnd.geometry.coordinates;
-      const p = L.latLng(lat, lng);
-      // Make sure ghost spawns away from player
+      const p = {lat, lng};
       if (playerLatLng && metersBetween(p, playerLatLng) < 100) continue;
       return new Ghost(p, options);
     }
@@ -1204,22 +1252,18 @@
   // Wake Lock variable
   let wakeLock = null;
 
-  // Function to request wake lock
   async function requestWakeLock() {
     try {
       wakeLock = await navigator.wakeLock.request('screen');
-      //console.log('Wake Lock is active');
     } catch (err) {
       console.log(`Failed to get Wake Lock: ${err.name}, ${err.message}`);
     }
   }
 
-  // Function to release wake lock
   function releaseWakeLock() {
     if (wakeLock !== null) {
       wakeLock.release()
         .then(() => {
-          //console.log('Wake Lock has been released');
           wakeLock = null;
         })
         .catch((err) => {
@@ -1231,11 +1275,9 @@
   function startGame(){
     if (!playerLatLng){ alert('Sett spillerposisjon (GPS eller trykk i kartet).'); return; }
     if (!boundaryPoly) {
-      ensureDefaultBoundary(playerLatLng); // 500 m sirkel
+      ensureDefaultBoundary(playerLatLng);
     }
     clearGhosts();
-    
-    // Request wake lock when game starts
     requestWakeLock();
     caughtEl.style.display='none';
 
@@ -1252,27 +1294,21 @@
       const rnd=turf.randomPoint(1,{bbox:bb}).features[0];
       if (!turf.booleanPointInPolygon(rnd, boundaryPoly)) continue;
       const [lng,lat]=rnd.geometry.coordinates;
-      const p=L.latLng(lat,lng);
-      // Ikke spawn inni hindring
+      const p={lat,lng};
       if (pointInsideAnyObstacle(p)) continue;
       ghosts.push(new Ghost(p, {speed,fov,viewDist,proximity:prox}));
       created++;
     }
 
     setStatus(`Spøkelser klare: ${ghosts.length}. Gjem deg nå!`);
-
-    // Keep the existing boundary configuration
     drawBoundary(boundaryPoly);
 
     Game.state=STATE.COUNTDOWN;
     countdownEl.style.display='block';
-    let count=1, elapsed=0;
-    countdownEl.textContent=`${count}`;
     const startTime = Date.now();
     const countdownUpdate = () => {
       const elapsedSec = Math.floor((Date.now() - startTime) / 1000);
       const remaining = Game.hideSeconds - elapsedSec;
-      
       if (remaining <= 0) {
         clearInterval(timer);
         countdownEl.style.display = 'none';
@@ -1281,7 +1317,7 @@
         countdownEl.textContent = remaining;
       }
     };
-    countdownUpdate(); // Show initial number
+    countdownUpdate();
     const timer = setInterval(countdownUpdate, 1000);
   }
 
@@ -1289,14 +1325,12 @@
     Game.state=STATE.RUNNING;
     if (Game.timer) clearInterval(Game.timer);
     Game.timer=setInterval(()=>tick(Game.tickMs/1000), Game.tickMs);
-    setStatus('Spillet er i gang! Hold deg unna spøkelsenes synsfelt.');
+    setStatus('Spillet er i gang! Hold deg unna spøkelser.');
     startStopwatch();
   }
 
   function tick(dt){
     if (Game.state!==STATE.RUNNING || !playerLatLng) return;
-    
-    // Check if it's time to spawn a new ghost
     const now = Date.now();
     if (!Game.lastGhostSpawn) {
       Game.lastGhostSpawn = now;
@@ -1306,7 +1340,6 @@
       const fov = Number(inputFov.value || 95);
       const viewDist = Number(inputViewDist.value || 70);
       const prox = Number(inputProx.value || 0);
-      
       const newGhost = spawnGhost({ speed, fov, viewDist, proximity: prox });
       if (newGhost) {
         ghosts.push(newGhost);
@@ -1314,26 +1347,19 @@
         setStatus(`Et nytt spøkelse har dukket opp! (${ghosts.length}/${Game.maxGhosts})`);
       }
     }
-    
     let playerFound = false;
     const tasks = [];
-    
-    // Quick first pass: check proximity only (fastest check)
     for(const g of ghosts){
       const d = metersBetween(g.latlng, playerLatLng);
       if (d <= g.proximity) {
         playerFound = true;
         break;
       }
-      // If not in proximity, queue up for full visibility check
       if (d <= g.viewDist) {
         tasks.push(g);
       }
-      // Update movement regardless
       g.steer(dt, playerLatLng, ghosts);
     }
-    
-    // If player not found by proximity, do full visibility checks
     if (!playerFound && tasks.length > 0) {
       for(const g of tasks){
         if (g.seesPlayer(playerLatLng)){ 
@@ -1342,7 +1368,6 @@
         }
       }
     }
-    
     if (playerFound) {
       gameOver();
     }
@@ -1352,19 +1377,13 @@
     Game.state=STATE.CAUGHT;
     if (Game.timer){ clearInterval(Game.timer); Game.timer=null; }
     stopStopwatch();
-    
-    // Release wake lock when game ends
     releaseWakeLock();
-    
-    // Calculate time played
     const timePlayedMs = Date.now() - Game.startedAt;
     const timePlayedSec = Math.floor(timePlayedMs / 1000);
-    
-    // Check for high score
     checkHighScore(timePlayedSec, ghosts.length).then(() => {
       $('overlay').style.display='block';
       caughtEl.style.display='block';
-      loadLeaderboard(); // Refresh leaderboard display
+      loadLeaderboard();
       setStatus('Du ble funnet! Trykk Reset for ny runde.');
     });
   }
@@ -1379,10 +1398,7 @@
     clearGhosts();
     Game.shrunk=false;
     Game.lastGhostSpawn=null;
-    
-    // Release wake lock when game is reset
     releaseWakeLock();
-    
     setStatus('Klar for ny runde.');
   }
 
@@ -1392,22 +1408,12 @@
     startGame();
   });
   btnReset.addEventListener('click', resetGame);
-  
-  // Click handlers for game over screen
   $('overlay').addEventListener('click', resetGame);
   caughtEl.addEventListener('click', resetGame);
 
   // Welcome modal handling
   const welcomeModal = $('welcome-modal');
   const welcomeStartBtn = $('welcome-start');
-
-  /* Show welcome modal on first visit
-  if (!localStorage.getItem('hasSeenWelcome')) {
-    welcomeModal.style.display = 'block';
-  } else {
-    welcomeModal.style.display = 'none';
-  }
-  */
   welcomeStartBtn.addEventListener('click', () => {
     welcomeModal.style.display = 'none';
     localStorage.setItem('hasSeenWelcome', 'true');
