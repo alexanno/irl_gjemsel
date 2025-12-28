@@ -449,6 +449,7 @@
     <div class="row">
       <button id="btnStart">Start (20s gjemmetid)</button>
       <button id="btnReset" class="secondary">Reset</button>
+      <button id="btnToggleSound" class="secondary" title="Aktiver/deaktiver lydeffekt">🔇 Lyd</button>
     </div>
 
     <div class="hidewrapper">
@@ -726,7 +727,7 @@
 
   // UI
   const $ = (id)=>document.getElementById(id);
-  const btnStart=$('btnStart'), btnReset=$('btnReset'), toggleHud=$('toggleHud');
+  const btnStart=$('btnStart'), btnReset=$('btnReset'), toggleHud=$('toggleHud'), btnToggleSound=$('btnToggleSound');
   const inputGhosts=$('ghosts'), inputSpeed=$('speed'), inputFov=$('fov'), inputViewDist=$('viewDist'), inputProx=$('prox');
   const fileBoundary=$('geojsonBoundary');
   const statusEl=$('status'), countdownEl=$('countdown'), caughtEl=$('caught'), stopwatchEl=$('stopwatch'), warnEl=$('warn');
@@ -743,6 +744,82 @@
     spawnGhostInterval: 5, // Seconds between new ghost spawns
     lastGhostSpawn: null,
     maxGhosts: 25 // Maximum number of ghosts that can be spawned
+  };
+
+  // --- Sound System (Geiger Counter Effect) ---
+  const SoundSystem = {
+    audioContext: null,
+    enabled: false,
+    lastClickTime: 0,
+    clickInterval: 1000, // milliseconds between clicks
+    minInterval: 50,     // fastest click rate (very close)
+    maxInterval: 2000,   // slowest click rate (far away)
+    maxDistance: 200,    // max distance for sound (meters)
+    
+    init() {
+      if (!this.audioContext) {
+        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      }
+    },
+    
+    playClick() {
+      if (!this.enabled || !this.audioContext) return;
+      
+      const now = this.audioContext.currentTime;
+      const oscillator = this.audioContext.createOscillator();
+      const gainNode = this.audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(this.audioContext.destination);
+      
+      // Geiger counter click sound parameters
+      oscillator.frequency.value = 800 + Math.random() * 400; // Random frequency for variation
+      oscillator.type = 'square';
+      
+      // Sharp attack and decay for click sound
+      gainNode.gain.setValueAtTime(0.3, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+      
+      oscillator.start(now);
+      oscillator.stop(now + 0.05);
+    },
+    
+    updateDistance(distanceToNearestGhost) {
+      if (!this.enabled) return;
+      
+      if (distanceToNearestGhost === null || distanceToNearestGhost > this.maxDistance) {
+        this.clickInterval = this.maxInterval;
+        return;
+      }
+      
+      // Map distance to click interval (closer = faster clicks)
+      // Linear interpolation between minInterval and maxInterval
+      const ratio = Math.min(1, distanceToNearestGhost / this.maxDistance);
+      this.clickInterval = this.minInterval + (this.maxInterval - this.minInterval) * ratio;
+    },
+    
+    tick() {
+      if (!this.enabled) return;
+      
+      const now = Date.now();
+      if (now - this.lastClickTime >= this.clickInterval) {
+        this.playClick();
+        this.lastClickTime = now;
+      }
+    },
+    
+    toggle() {
+      this.enabled = !this.enabled;
+      if (this.enabled) {
+        this.init();
+        this.lastClickTime = Date.now();
+      }
+      return this.enabled;
+    },
+    
+    stop() {
+      this.enabled = false;
+    }
   };
 
   // Geometri
@@ -1347,10 +1424,16 @@
         setStatus(`Et nytt spøkelse har dukket opp! (${ghosts.length}/${Game.maxGhosts})`);
       }
     }
+    
+    // Find nearest ghost and update sound system
+    let minDistance = null;
     let playerFound = false;
     const tasks = [];
     for(const g of ghosts){
       const d = metersBetween(g.latlng, playerLatLng);
+      if (minDistance === null || d < minDistance) {
+        minDistance = d;
+      }
       if (d <= g.proximity) {
         playerFound = true;
         break;
@@ -1360,6 +1443,11 @@
       }
       g.steer(dt, playerLatLng, ghosts);
     }
+    
+    // Update sound based on nearest ghost distance
+    SoundSystem.updateDistance(minDistance);
+    SoundSystem.tick();
+    
     if (!playerFound && tasks.length > 0) {
       for(const g of tasks){
         if (g.seesPlayer(playerLatLng)){ 
@@ -1378,6 +1466,7 @@
     if (Game.timer){ clearInterval(Game.timer); Game.timer=null; }
     stopStopwatch();
     releaseWakeLock();
+    SoundSystem.stop();
     const timePlayedMs = Date.now() - Game.startedAt;
     const timePlayedSec = Math.floor(timePlayedMs / 1000);
     checkHighScore(timePlayedSec, ghosts.length).then(() => {
@@ -1399,6 +1488,7 @@
     Game.shrunk=false;
     Game.lastGhostSpawn=null;
     releaseWakeLock();
+    SoundSystem.stop();
     setStatus('Klar for ny runde.');
   }
 
@@ -1410,6 +1500,12 @@
   btnReset.addEventListener('click', resetGame);
   $('overlay').addEventListener('click', resetGame);
   caughtEl.addEventListener('click', resetGame);
+
+  // Sound toggle button
+  btnToggleSound.addEventListener('click', ()=>{
+    const enabled = SoundSystem.toggle();
+    btnToggleSound.textContent = enabled ? '🔊 Lyd' : '🔇 Lyd';
+  });
 
   // Welcome modal handling
   const welcomeModal = $('welcome-modal');
