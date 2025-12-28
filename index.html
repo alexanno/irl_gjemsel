@@ -449,7 +449,7 @@
     <div class="row">
       <button id="btnStart">Start (20s gjemmetid)</button>
       <button id="btnReset" class="secondary">Reset</button>
-      <button id="btnToggleSound" class="secondary" title="Aktiver/deaktiver lydeffekt">🔇 Lyd</button>
+      <button id="btnToggleSound" class="secondary" title="Aktiver/deaktiver lydeffekt" aria-label="Toggle sound effect" aria-pressed="false">🔇 Lyd</button>
     </div>
 
     <div class="hidewrapper">
@@ -755,6 +755,11 @@
     minInterval: 50,     // fastest click rate (very close)
     maxInterval: 2000,   // slowest click rate (far away)
     maxDistance: 200,    // max distance for sound (meters)
+    // Sound generation parameters
+    baseFrequency: 800,      // Hz
+    frequencyVariation: 400, // Hz
+    clickVolume: 0.3,        // 0.0 to 1.0
+    clickDuration: 0.05,     // seconds
     
     init() {
       if (!this.audioContext) {
@@ -778,15 +783,15 @@
       gainNode.connect(this.audioContext.destination);
       
       // Geiger counter click sound parameters
-      oscillator.frequency.value = 800 + Math.random() * 400; // Random frequency for variation
+      oscillator.frequency.value = this.baseFrequency + Math.random() * this.frequencyVariation;
       oscillator.type = 'square';
       
       // Sharp attack and decay for click sound
-      gainNode.gain.setValueAtTime(0.3, now);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+      gainNode.gain.setValueAtTime(this.clickVolume, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + this.clickDuration);
       
       oscillator.start(now);
-      oscillator.stop(now + 0.05);
+      oscillator.stop(now + this.clickDuration);
     },
     
     updateDistance(distanceToNearestGhost) {
@@ -1510,6 +1515,7 @@
   btnToggleSound.addEventListener('click', ()=>{
     const enabled = SoundSystem.toggle();
     btnToggleSound.textContent = enabled ? '🔊 Lyd' : '🔇 Lyd';
+    btnToggleSound.setAttribute('aria-pressed', enabled ? 'true' : 'false');
   });
 
   // Welcome modal handling
