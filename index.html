@@ -1080,7 +1080,7 @@
     
     for (const [category, weight] of Object.entries(weights)) {
       cumulative += weight;
-      if (rand <= cumulative) {
+      if (rand < cumulative) {
         return category;
       }
     }
@@ -1115,12 +1115,13 @@
         this.color = cat.color;
         this.coneColor = cat.coneColor;
       } else {
+        // Fallback to balanced category defaults for custom ghosts
         this.category = 'custom';
-        this.speed = opts.speed || 4.2;
+        this.speed = opts.speed || 5;
         this.fov = opts.fov || 95;
         this.viewDist = opts.viewDist || 70;
-        this.color = opts.color || '#f66';
-        this.coneColor = opts.coneColor || '#fcc';
+        this.color = opts.color || '#ff6666';
+        this.coneColor = opts.coneColor || '#ffcccc';
       }
       
       this.proximity=opts.proximity||0;
