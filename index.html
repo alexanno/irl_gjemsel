@@ -502,9 +502,10 @@
       <div>🔵 Du</div>
       <div style="color:#ff6666">🔴 Spøkelser</div>
       <div style="font-size:10px; margin-top:4px">
-        <span style="color:#ff6600">●</span> Rask (kort syn)
-        <span style="color:#9933ff">●</span> Vokter (langt syn)
-        <span style="color:#cc0000">●</span> Elite (sjelden)
+        <span style="color:#ff6600">●</span> Rask
+        <span style="color:#9933ff">●</span> Vokter
+        <span style="color:#ff6666">●</span> Balansert
+        <span style="color:#cc0000">●</span> Elite
       </div>
     </div>  <div id="countdown"></div>
   <div id="stopwatch"></div>
@@ -764,8 +765,7 @@
       viewDist: 50,
       fov: 90,
       color: '#ff6600',  // Orange
-      coneColor: '#ffcc99',
-      rarity: 0.3  // 30% spawn rate
+      coneColor: '#ffcc99'
     },
     watcher: {
       name: 'Watcher',
@@ -773,8 +773,7 @@
       viewDist: 100,
       fov: 120,
       color: '#9933ff',  // Purple
-      coneColor: '#e6ccff',
-      rarity: 0.3  // 30% spawn rate
+      coneColor: '#e6ccff'
     },
     balanced: {
       name: 'Balanced',
@@ -782,8 +781,7 @@
       viewDist: 70,
       fov: 95,
       color: '#ff6666',  // Red (default)
-      coneColor: '#ffcccc',
-      rarity: 0.35  // 35% spawn rate
+      coneColor: '#ffcccc'
     },
     elite: {
       name: 'Elite',
@@ -791,8 +789,7 @@
       viewDist: 100,
       fov: 110,
       color: '#cc0000',  // Dark Red
-      coneColor: '#ff9999',
-      rarity: 0.05  // 5% spawn rate (rare)
+      coneColor: '#ff9999'
     }
   };
 
@@ -1073,6 +1070,10 @@
 
   // --- Spøkelse ---
   function selectGhostCategory(difficulty) {
+    if (!DIFFICULTY_SETTINGS[difficulty]) {
+      return 'balanced';  // Fallback to balanced for invalid difficulty
+    }
+    
     const weights = DIFFICULTY_SETTINGS[difficulty].categories;
     const rand = Math.random();
     let cumulative = 0;
