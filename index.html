@@ -464,11 +464,11 @@
       <div class="row">
         <label for="ghosts">Spøkelser:</label>
         <input id="ghosts" type="number" value="5" min="1" max="100" style="width:70px"/>
+        <label for="speed" title="Grunnhastighet (balansert spøkelse)">Hastighet(m/s):</label>
+        <input id="speed" type="number" value="5" min="0.5" max="15" step="0.5" style="width:70px"/>
       </div>
 
       <div class="row hidden">
-        <label for="speed" title="hastighet m/s">Hastighet:</label>
-        <input id="speed" type="number" value="5.5" min="0.5" max="15" step="0.1" style="width:70px"/>
         <label for="fov" title="Synsfelt i grader">FOV°:</label>
         <input id="fov" type="number" value="95" min="30" max="180" step="5" style="width:70px"/>
       </div>
@@ -758,10 +758,11 @@
   const STATE={IDLE:'idle', COUNTDOWN:'countdown', RUNNING:'running', CAUGHT:'caught'};
   
   // Ghost categories with different characteristics
+  // Speed is defined as a factor of the base (balanced) speed
   const GHOST_CATEGORIES = {
     fast_runner: {
       name: 'Fast Runner',
-      speed: 7,
+      speedFactor: 1.4,  // 40% faster than balanced
       viewDist: 50,
       fov: 90,
       color: '#ff6600',  // Orange
@@ -769,7 +770,7 @@
     },
     watcher: {
       name: 'Watcher',
-      speed: 3,
+      speedFactor: 0.6,  // 40% slower than balanced
       viewDist: 100,
       fov: 120,
       color: '#9933ff',  // Purple
@@ -777,7 +778,7 @@
     },
     balanced: {
       name: 'Balanced',
-      speed: 5,
+      speedFactor: 1.0,  // Base speed
       viewDist: 70,
       fov: 95,
       color: '#ff6666',  // Red (default)
@@ -785,7 +786,7 @@
     },
     elite: {
       name: 'Elite',
-      speed: 7,
+      speedFactor: 1.4,  // 40% faster than balanced
       viewDist: 100,
       fov: 110,
       color: '#cc0000',  // Dark Red
@@ -829,7 +830,8 @@
     spawnGhostInterval: 5, // Seconds between new ghost spawns
     lastGhostSpawn: null,
     maxGhosts: 25, // Maximum number of ghosts that can be spawned
-    difficulty: 'medium' // Default difficulty
+    difficulty: 'medium', // Default difficulty
+    baseSpeed: 5 // Default base speed for balanced ghosts
   };
 
   // Geometri
@@ -1108,8 +1110,9 @@
       // Use category if provided, otherwise use individual options
       if (opts.category && GHOST_CATEGORIES[opts.category]) {
         const cat = GHOST_CATEGORIES[opts.category];
+        const baseSpeed = opts.baseSpeed || 5;
         this.category = opts.category;
-        this.speed = cat.speed;
+        this.speed = baseSpeed * cat.speedFactor;
         this.fov = cat.fov;
         this.viewDist = cat.viewDist;
         this.color = cat.color;
@@ -1408,6 +1411,8 @@
     const n=Math.max(1, Math.min(100, Number(inputGhosts.value||3)));
     const difficulty = inputDifficulty.value || 'medium';
     Game.difficulty = difficulty;
+    const baseSpeed = Number(inputSpeed.value || 5);
+    Game.baseSpeed = baseSpeed;
     const prox=Number(inputProx.value||0);
 
     const bb=turf.bbox(boundaryPoly);
@@ -1421,7 +1426,7 @@
       if (pointInsideAnyObstacle(p)) continue;
       
       const category = selectGhostCategory(difficulty);
-      ghosts.push(new Ghost(p, {category, proximity:prox}));
+      ghosts.push(new Ghost(p, {category, proximity:prox, baseSpeed}));
       created++;
     }
 
@@ -1463,7 +1468,7 @@
                (now - Game.lastGhostSpawn) / 1000 >= Game.spawnGhostInterval) {
       const prox = Number(inputProx.value || 0);
       const category = selectGhostCategory(Game.difficulty);
-      const newGhost = spawnGhost({ category, proximity: prox });
+      const newGhost = spawnGhost({ category, proximity: prox, baseSpeed: Game.baseSpeed });
       if (newGhost) {
         ghosts.push(newGhost);
         Game.lastGhostSpawn = now;
