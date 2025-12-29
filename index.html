@@ -746,20 +746,17 @@
     maxGhosts: 25 // Maximum number of ghosts that can be spawned
   };
 
-  // --- Sound System (Geiger Counter Effect) ---
+  // --- Sound System (Simple Beep) ---
   const SoundSystem = {
     audioContext: null,
     enabled: false,
-    lastClickTime: 0,
-    clickInterval: 1000, // milliseconds between clicks
-    minInterval: 50,     // fastest click rate (very close)
-    maxInterval: 2000,   // slowest click rate (far away)
+    lastBeepTime: 0,
+    beepInterval: 1000,  // milliseconds between beeps
+    minInterval: 200,    // fastest beep rate (very close) - 200ms
+    maxInterval: 3000,   // slowest beep rate (far away) - 3000ms
     maxDistance: 200,    // max distance for sound (meters)
-    // Sound generation parameters
-    baseFrequency: 800,      // Hz
-    frequencyVariation: 400, // Hz
-    clickVolume: 0.3,        // 0.0 to 1.0
-    clickDuration: 0.05,     // seconds
+    beepFrequency: 800,  // Hz - simple constant beep tone
+    beepDuration: 0.1,   // seconds - duration of each beep
     
     init() {
       if (!this.audioContext) {
@@ -772,7 +769,7 @@
       }
     },
     
-    playClick() {
+    playBeep() {
       if (!this.enabled || !this.audioContext) return;
       
       const now = this.audioContext.currentTime;
@@ -782,39 +779,40 @@
       oscillator.connect(gainNode);
       gainNode.connect(this.audioContext.destination);
       
-      // Geiger counter click sound parameters
-      oscillator.frequency.value = this.baseFrequency + Math.random() * this.frequencyVariation;
-      oscillator.type = 'square';
+      // Simple beep with constant frequency
+      oscillator.frequency.value = this.beepFrequency;
+      oscillator.type = 'sine';
       
-      // Sharp attack and decay for click sound
-      gainNode.gain.setValueAtTime(this.clickVolume, now);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, now + this.clickDuration);
+      // Simple beep envelope
+      gainNode.gain.setValueAtTime(0, now);
+      gainNode.gain.linearRampToValueAtTime(0.3, now + 0.01);
+      gainNode.gain.linearRampToValueAtTime(0, now + this.beepDuration);
       
       oscillator.start(now);
-      oscillator.stop(now + this.clickDuration);
+      oscillator.stop(now + this.beepDuration);
     },
     
     updateDistance(distanceToNearestGhost) {
       if (!this.enabled) return;
       
       if (distanceToNearestGhost === null || distanceToNearestGhost > this.maxDistance) {
-        this.clickInterval = this.maxInterval;
+        this.beepInterval = this.maxInterval;
         return;
       }
       
-      // Map distance to click interval (closer = faster clicks)
+      // Map distance to beep interval (closer = faster beeps)
       // Linear interpolation between minInterval and maxInterval
       const ratio = Math.min(1, distanceToNearestGhost / this.maxDistance);
-      this.clickInterval = this.minInterval + (this.maxInterval - this.minInterval) * ratio;
+      this.beepInterval = this.minInterval + (this.maxInterval - this.minInterval) * ratio;
     },
     
     tick() {
       if (!this.enabled) return;
       
       const now = Date.now();
-      if (now - this.lastClickTime >= this.clickInterval) {
-        this.playClick();
-        this.lastClickTime = now;
+      if (now - this.lastBeepTime >= this.beepInterval) {
+        this.playBeep();
+        this.lastBeepTime = now;
       }
     },
     
@@ -822,7 +820,7 @@
       this.enabled = !this.enabled;
       if (this.enabled) {
         this.init();
-        this.lastClickTime = Date.now();
+        this.lastBeepTime = Date.now();
       }
       return this.enabled;
     },
