@@ -751,12 +751,12 @@
     audioContext: null,
     enabled: false,
     lastBeepTime: 0,
-    beepInterval: 1000,  // milliseconds between beeps
-    minInterval: 200,    // fastest beep rate (very close) - 200ms
+    beepInterval: 50,  // milliseconds between beeps
+    minInterval: 50,    // fastest beep rate (very close) - 50ms
     maxInterval: 3000,   // slowest beep rate (far away) - 3000ms
     maxDistance: 200,    // max distance for sound (meters)
     beepFrequency: 800,  // Hz - simple constant beep tone
-    beepDuration: 0.1,   // seconds - duration of each beep
+    beepDuration: 0.05,   // seconds - duration of each beep
     
     init() {
       if (!this.audioContext) {
