@@ -524,7 +524,70 @@
   </div>
 
 <script>
+
+/**
+ * CONFIGURATION AND INITIALIZATION
+ */
+
 (function() {
+  // ============================================================================
+  // GAME CONFIGURATION
+  // ============================================================================
+  const CONFIG = {
+    // Map settings
+    map: {
+      defaultZoom: 19,
+      defaultCenter: { lat: 58.1467, lng: 7.9956 },
+      tileStyle: 'https://tiles.openfreemap.org/styles/liberty'
+    },
+
+    // Boundary settings
+    boundary: {
+      defaultRadiusMeters: 50,           // Default boundary circle radius
+      shrinkFactor: 0.8,                 // Shrink to 80% of original size
+      shrinkTimeSeconds: 120             // Time before boundary shrinks (2 minutes)
+    },
+
+    // Game timing
+    game: {
+      tickMs: 100,                       // Game loop tick interval
+      hideSeconds: 10,                   // Countdown time before game starts
+      spawnGhostIntervalSeconds: 5,      // Time between new ghost spawns
+      maxGhosts: 25                      // Maximum number of ghosts
+    },
+
+    // Default ghost parameters (can be overridden by UI inputs)
+    ghost: {
+      defaultCount: 5,                   // Initial number of ghosts
+      defaultSpeed: 1,                   // Ghost movement speed (m/s)
+      defaultFOV: 95,                    // Field of view in degrees
+      defaultViewDistance: 10,           // Vision range in meters
+      defaultProximity: 0,               // Capture distance regardless of vision
+      separationDistance: 25,            // Distance for ghost separation behavior
+      patrolRecalcMinMs: 9000,          // Min time before recalculating patrol
+      patrolRecalcMaxMs: 15000,         // Max time before recalculating patrol
+      searchDurationMs: 6000,            // How long to search after losing player
+      chaseMaxTurnRate: 160,             // Max heading change in chase mode (deg/s)
+      searchMaxTurnRate: 100,            // Max heading change in search mode (deg/s)
+      patrolMaxTurnRate: 60,             // Max heading change in patrol mode (deg/s)
+      searchSpeedFactor: 0.75            // Speed multiplier in search mode
+    },
+
+    // Player settings
+    player: {
+      defaultAccuracyMeters: 10,         // Default GPS accuracy circle
+      minSpawnDistanceFromGhost: 10     // Minimum distance when spawning ghosts
+    },
+
+    // Turf.js circle generation
+    turf: {
+      circleSteps: 64                    // Number of steps for circle polygons
+    }
+  };
+
+  // ============================================================================
+  // FIREBASE CONFIGURATION
+  // ============================================================================
   // Firebase configuration and initialization
   const firebaseConfig = {
     apiKey: "AIzaSyC6Dtf_R_xe-zWORr1T4-jkpqfaNmkeHj4",
@@ -616,15 +679,12 @@
     toggleLeaderboard.textContent = leaderboard.classList.contains('min') ? '🏆' : '−';
   });
 
-  const defaultZoom = 19;
-  const defaultCenter = { lat: 58.1467, lng: 7.9956 };
-
   // --- Kart (MapLibre vector, OpenFreeMap) ---
   const map = new maplibregl.Map({
     container: 'map',
-    style: 'https://tiles.openfreemap.org/styles/liberty',
-    center: [defaultCenter.lng, defaultCenter.lat],
-    zoom: defaultZoom,
+    style: CONFIG.map.tileStyle,
+    center: [CONFIG.map.defaultCenter.lng, CONFIG.map.defaultCenter.lat],
+    zoom: CONFIG.map.defaultZoom,
     attributionControl: true
   });
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
@@ -738,17 +798,24 @@
 
   const STATE={IDLE:'idle', COUNTDOWN:'countdown', RUNNING:'running', CAUGHT:'caught'};
   const Game={
-    state:STATE.IDLE, tickMs:100, hideSeconds:10, timer:null, watcher:null,
-    startedAt:null, stopwatchTimer:null, shrunk:false, shrinkTimeSec:20,
-    spawnGhostInterval: 5, // Seconds between new ghost spawns
+    state:STATE.IDLE, 
+    tickMs:CONFIG.game.tickMs, 
+    hideSeconds:CONFIG.game.hideSeconds, 
+    timer:null, 
+    watcher:null,
+    startedAt:null, 
+    stopwatchTimer:null, 
+    shrunk:false, 
+    shrinkTimeSec:CONFIG.boundary.shrinkTimeSeconds,
+    spawnGhostInterval: CONFIG.game.spawnGhostIntervalSeconds,
     lastGhostSpawn: null,
-    maxGhosts: 25 // Maximum number of ghosts that can be spawned
+    maxGhosts: CONFIG.game.maxGhosts
   };
 
   // Geometri
   let boundaryPoly=null; // Turf (Polygon/MultiPolygon)
   let boundaryIsCircle=false; // spesiell håndtering (radius/center)
-  let boundaryCircleCenter=null, boundaryCircleRadiusM=100; // default radius
+  let boundaryCircleCenter=null, boundaryCircleRadiusM=CONFIG.boundary.defaultRadiusMeters;
   let originalBoundaryGeom=null; // for krymp-logikk
 
   let obstaclesPolys=[];   // Turf Polygon/MultiPolygon
@@ -820,15 +887,15 @@
     try { 
       const center = turf.center(boundaryPoly);
       map.setCenter([center.geometry.coordinates[0], center.geometry.coordinates[1]]);
-      map.setZoom(defaultZoom);
+      map.setZoom(CONFIG.map.defaultZoom);
     } catch (e){}
   }
   function ensureDefaultBoundary(center){
     const c=center||map.getCenter();
     const llCenter = { lat: c.lat, lng: c.lng };
     boundaryCircleCenter = llCenter;
-    boundaryCircleRadiusM = 50;
-    const circle=turf.circle([llCenter.lng,llCenter.lat], boundaryCircleRadiusM/1000, {units:'kilometers',steps:64});
+    boundaryCircleRadiusM = CONFIG.boundary.defaultRadiusMeters;
+    const circle=turf.circle([llCenter.lng,llCenter.lat], boundaryCircleRadiusM/1000, {units:'kilometers',steps:CONFIG.turf.circleSteps});
     setBoundary(circle, true);
   }
   function shrinkBoundaryTo80(){
@@ -836,8 +903,8 @@
     Game.shrunk = true;
 
     if (boundaryIsCircle && boundaryCircleCenter){
-      boundaryCircleRadiusM = boundaryCircleRadiusM * 0.8;
-      const circle=turf.circle([boundaryCircleCenter.lng,boundaryCircleCenter.lat], boundaryCircleRadiusM/1000, {units:'kilometers',steps:64});
+      boundaryCircleRadiusM = boundaryCircleRadiusM * CONFIG.boundary.shrinkFactor;
+      const circle=turf.circle([boundaryCircleCenter.lng,boundaryCircleCenter.lat], boundaryCircleRadiusM/1000, {units:'kilometers',steps:CONFIG.turf.circleSteps});
       boundaryPoly = circle;
       drawBoundary(circle);
 
@@ -853,7 +920,7 @@
       return;
     }
 
-    const scale = Math.sqrt(0.8);
+    const scale = Math.sqrt(CONFIG.boundary.shrinkFactor);
     const centroid = turf.centroid(boundaryPoly).geometry.coordinates;
     function scaleCoords(coords){
       return coords.map(ring => ring.map(([lng,lat])=>{
@@ -942,7 +1009,7 @@
     const features=[];
     if (ll){
       if (acc){
-        const accCircle = turf.circle([ll.lng,ll.lat], (acc||10)/1000, {units:'kilometers', steps:64});
+        const accCircle = turf.circle([ll.lng,ll.lat], (acc||CONFIG.player.defaultAccuracyMeters)/1000, {units:'kilometers', steps:CONFIG.turf.circleSteps});
         features.push({ type:'Feature', properties:{kind:'accuracy'}, geometry: accCircle.geometry });
       }
       features.push({ type:'Feature', properties:{kind:'player'}, geometry:{ type:'Point', coordinates:[ll.lng, ll.lat] }});
@@ -961,7 +1028,7 @@
       return;
     }
     playerLatLng=ll;
-    updatePlayerFeatures(ll, acc||10);
+    updatePlayerFeatures(ll, acc||CONFIG.player.defaultAccuracyMeters);
   }
 
   if ("geolocation" in navigator){
@@ -997,15 +1064,15 @@
       this.id=`ghost-${Date.now()}-${Math.random().toString(16).slice(2,6)}`;
       this.latlng=ll;
       this.heading=Math.random()*360;
-      this.speed=opts.speed||4.2;
-      this.fov=opts.fov||95;
-      this.viewDist=opts.viewDist||70;
-      this.proximity=opts.proximity||0;
+      this.speed=opts.speed||CONFIG.ghost.defaultSpeed;
+      this.fov=opts.fov||CONFIG.ghost.defaultFOV;
+      this.viewDist=opts.viewDist||CONFIG.ghost.defaultViewDistance;
+      this.proximity=opts.proximity||CONFIG.ghost.defaultProximity;
       this.mode='patrol';
       this.lastSeenTarget=null;
       this.searchUntil=0;
       this.patrolTarget=this.pickPatrolTarget();
-      this.patrolRecalcAt=Date.now()+8000+Math.random()*4000;
+      this.patrolRecalcAt=Date.now()+CONFIG.ghost.patrolRecalcMinMs+Math.random()*(CONFIG.ghost.patrolRecalcMaxMs-CONFIG.ghost.patrolRecalcMinMs);
 
       this.markerFeature={
         type:'Feature',
@@ -1079,7 +1146,7 @@
         const snapshot={lat:playerLL.lat, lng:playerLL.lng};
         this.mode='chase';
         this.lastSeenTarget=snapshot;
-        this.searchUntil=now+6000;
+        this.searchUntil=now+CONFIG.ghost.searchDurationMs;
       } else if (this.mode==='chase' && this.lastSeenTarget){
         this.mode='search';
       } else if (this.mode==='search' && (!this.lastSeenTarget || now>this.searchUntil)){
@@ -1100,29 +1167,29 @@
 
       if (this.mode==='chase' && playerLL){
         desiredHeading=bearingTo(this.latlng, playerLL);
-        this.heading=clampHeadingDiff(this.heading, desiredHeading, 160*dt);
+        this.heading=clampHeadingDiff(this.heading, desiredHeading, CONFIG.ghost.chaseMaxTurnRate*dt);
       } else if (this.mode==='search' && this.lastSeenTarget){
         desiredHeading=bearingTo(this.latlng, this.lastSeenTarget);
         const sweep=Math.sin(now/500)*35;
         desiredHeading=(desiredHeading+sweep+360)%360;
-        moveSpeed=this.speed*0.75;
-        this.heading=clampHeadingDiff(this.heading, desiredHeading, 100*dt);
+        moveSpeed=this.speed*CONFIG.ghost.searchSpeedFactor;
+        this.heading=clampHeadingDiff(this.heading, desiredHeading, CONFIG.ghost.searchMaxTurnRate*dt);
         if (metersBetween(this.latlng, this.lastSeenTarget)<8){
           this.mode='patrol';
           this.lastSeenTarget=null;
           this.searchUntil=0;
           this.patrolTarget=this.pickPatrolTarget();
-          this.patrolRecalcAt=now+9000+Math.random()*6000;
+          this.patrolRecalcAt=now+CONFIG.ghost.patrolRecalcMinMs+Math.random()*(CONFIG.ghost.patrolRecalcMaxMs-CONFIG.ghost.patrolRecalcMinMs);
         }
       } else {
         if (!this.patrolTarget || !pointInside(boundaryPoly, this.patrolTarget) || metersBetween(this.latlng, this.patrolTarget)<8 || now>this.patrolRecalcAt){
           this.patrolTarget=this.pickPatrolTarget();
-          this.patrolRecalcAt=now+9000+Math.random()*6000;
+          this.patrolRecalcAt=now+CONFIG.ghost.patrolRecalcMinMs+Math.random()*(CONFIG.ghost.patrolRecalcMaxMs-CONFIG.ghost.patrolRecalcMinMs);
         }
         if (this.patrolTarget){
           desiredHeading=bearingTo(this.latlng, this.patrolTarget);
         }
-        this.heading=clampHeadingDiff(this.heading, desiredHeading, 60*dt);
+        this.heading=clampHeadingDiff(this.heading, desiredHeading, CONFIG.ghost.patrolMaxTurnRate*dt);
         const probe=moveFrom(this.latlng, this.heading, this.speed*dt*2);
         if (boundaryPoly && (!pointInside(boundaryPoly, probe) || !lineWithin(boundaryPoly, this.latlng, probe))){
           this.patrolTarget=this.pickPatrolTarget();
@@ -1136,9 +1203,9 @@
         for(const other of allGhosts){
           if (other===this || !other.latlng) continue;
           const dist=metersBetween(this.latlng, other.latlng);
-          if (!dist || dist>25) continue;
+          if (!dist || dist>CONFIG.ghost.separationDistance) continue;
           const away=bearingTo(other.latlng, this.latlng);
-          const strength=(25-dist)/25;
+          const strength=(CONFIG.ghost.separationDistance-dist)/CONFIG.ghost.separationDistance;
           const rad=away*Math.PI/180;
           vx+=Math.cos(rad)*strength;
           vy+=Math.sin(rad)*strength;
@@ -1234,18 +1301,21 @@
   }
 
   function spawnGhost(options) {
+    console.log('is boundaryPoly defined?', !!boundaryPoly);
     if (!boundaryPoly) return null;
     const bb = turf.bbox(boundaryPoly);
     let tries = 0;
     while (tries < 1000) {
-      tries++;
-      const rnd = turf.randomPoint(1, { bbox: bb }).features[0];
-      if (!turf.booleanPointInPolygon(rnd, boundaryPoly)) continue;
-      const [lng, lat] = rnd.geometry.coordinates;
-      const p = {lat, lng};
-      if (playerLatLng && metersBetween(p, playerLatLng) < 100) continue;
-      return new Ghost(p, options);
+        tries++;
+        const rnd = turf.randomPoint(1, { bbox: bb }).features[0];
+        if (!turf.booleanPointInPolygon(rnd, boundaryPoly)) continue;
+        const [lng, lat] = rnd.geometry.coordinates;
+        const p = {lat, lng};
+        if (playerLatLng && metersBetween(p, playerLatLng) < CONFIG.player.minSpawnDistanceFromGhost) continue;
+        if (pointInsideAnyObstacle(p)) continue;
+        return new Ghost(p, options);
     }
+    console.log('Failed to spawn ghost after 1000 tries.');
     return null;
   }
 
@@ -1281,11 +1351,11 @@
     requestWakeLock();
     caughtEl.style.display='none';
 
-    const n=Math.max(1, Math.min(100, Number(inputGhosts.value||3)));
-    const speed=Number(inputSpeed.value||1.2);
-    const fov=Number(inputFov.value||95);
-    const viewDist=Number(inputViewDist.value||70);
-    const prox=Number(inputProx.value||0);
+    const n=Math.max(1, Math.min(100, Number(inputGhosts.value||CONFIG.ghost.defaultCount)));
+    const speed=Number(inputSpeed.value||CONFIG.ghost.defaultSpeed);
+    const fov=Number(inputFov.value||CONFIG.ghost.defaultFOV);
+    const viewDist=Number(inputViewDist.value||CONFIG.ghost.defaultViewDistance);
+    const prox=Number(inputProx.value||CONFIG.ghost.defaultProximity);
 
     const bb=turf.bbox(boundaryPoly);
     let created=0, safety=0;
@@ -1304,6 +1374,7 @@
     drawBoundary(boundaryPoly);
 
     Game.state=STATE.COUNTDOWN;
+    Game.lastGhostSpawn = null;
     countdownEl.style.display='block';
     const startTime = Date.now();
     const countdownUpdate = () => {
@@ -1332,16 +1403,21 @@
   function tick(dt){
     if (Game.state!==STATE.RUNNING || !playerLatLng) return;
     const now = Date.now();
-    if (!Game.lastGhostSpawn) {
+    //log to console the now - Game.lastGhostSpawn) / 1000 >= Game.spawnGhostInterval
+    console.log(`Time since last ghost spawn: ${Game.lastGhostSpawn ? (now - Game.lastGhostSpawn) / 1000 : 'N/A'} seconds`);
+    if (Game.lastGhostSpawn === null) {
       Game.lastGhostSpawn = now;
     } else if (ghosts.length < Game.maxGhosts && 
                (now - Game.lastGhostSpawn) / 1000 >= Game.spawnGhostInterval) {
-      const speed = Number(inputSpeed.value || 1.2);
-      const fov = Number(inputFov.value || 95);
-      const viewDist = Number(inputViewDist.value || 70);
-      const prox = Number(inputProx.value || 0);
+      const speed = Number(inputSpeed.value || CONFIG.ghost.defaultSpeed);
+      const fov = Number(inputFov.value || CONFIG.ghost.defaultFOV);
+      const viewDist = Number(inputViewDist.value || CONFIG.ghost.defaultViewDistance);
+      const prox = Number(inputProx.value || CONFIG.ghost.defaultProximity);
+      console.log('parameters for new ghost:', { speed, fov, viewDist, prox });
       const newGhost = spawnGhost({ speed, fov, viewDist, proximity: prox });
+      console.log(`Spawning new ghost: ${newGhost ? 'Success' : 'Failed'}`);
       if (newGhost) {
+        console.log(`New ghost spawned at lat: ${newGhost.latlng.lat}, lng: ${newGhost.latlng.lng}`);
         ghosts.push(newGhost);
         Game.lastGhostSpawn = now;
         setStatus(`Et nytt spøkelse har dukket opp! (${ghosts.length}/${Game.maxGhosts})`);
