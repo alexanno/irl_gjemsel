@@ -582,8 +582,24 @@
     // Turf.js circle generation
     turf: {
       circleSteps: 64                    // Number of steps for circle polygons
+    },
+
+    // Debug settings
+    debug: {
+      loggingLevel: 0                    // 0=off, 1=errors, 2=warnings, 3=info, 4=debug
     }
   };
+
+  // ============================================================================
+  // LOGGING UTILITY
+  // ============================================================================
+  window.logger = {
+    error: (...args) => { if (CONFIG.debug.loggingLevel >= 1) console.error(...args); },
+    warn: (...args) => { if (CONFIG.debug.loggingLevel >= 2) console.warn(...args); },
+    info: (...args) => { if (CONFIG.debug.loggingLevel >= 3) console.log(...args); },
+    debug: (...args) => { if (CONFIG.debug.loggingLevel >= 4) console.log(...args); }
+  };
+  const logger = window.logger; // Local alias for convenience
 
   // ============================================================================
   // FIREBASE CONFIGURATION
@@ -1301,7 +1317,7 @@
   }
 
   function spawnGhost(options) {
-    console.log('is boundaryPoly defined?', !!boundaryPoly);
+    logger.debug('is boundaryPoly defined?', !!boundaryPoly);
     if (!boundaryPoly) return null;
     const bb = turf.bbox(boundaryPoly);
     let tries = 0;
@@ -1315,7 +1331,7 @@
         if (pointInsideAnyObstacle(p)) continue;
         return new Ghost(p, options);
     }
-    console.log('Failed to spawn ghost after 1000 tries.');
+    logger.warn('Failed to spawn ghost after 1000 tries.');
     return null;
   }
 
@@ -1326,7 +1342,7 @@
     try {
       wakeLock = await navigator.wakeLock.request('screen');
     } catch (err) {
-      console.log(`Failed to get Wake Lock: ${err.name}, ${err.message}`);
+      logger.warn(`Failed to get Wake Lock: ${err.name}, ${err.message}`);
     }
   }
 
@@ -1403,8 +1419,7 @@
   function tick(dt){
     if (Game.state!==STATE.RUNNING || !playerLatLng) return;
     const now = Date.now();
-    //log to console the now - Game.lastGhostSpawn) / 1000 >= Game.spawnGhostInterval
-    console.log(`Time since last ghost spawn: ${Game.lastGhostSpawn ? (now - Game.lastGhostSpawn) / 1000 : 'N/A'} seconds`);
+    logger.debug(`Time since last ghost spawn: ${Game.lastGhostSpawn ? (now - Game.lastGhostSpawn) / 1000 : 'N/A'} seconds`);
     if (Game.lastGhostSpawn === null) {
       Game.lastGhostSpawn = now;
     } else if (ghosts.length < Game.maxGhosts && 
@@ -1413,11 +1428,11 @@
       const fov = Number(inputFov.value || CONFIG.ghost.defaultFOV);
       const viewDist = Number(inputViewDist.value || CONFIG.ghost.defaultViewDistance);
       const prox = Number(inputProx.value || CONFIG.ghost.defaultProximity);
-      console.log('parameters for new ghost:', { speed, fov, viewDist, prox });
+      logger.debug('parameters for new ghost:', { speed, fov, viewDist, prox });
       const newGhost = spawnGhost({ speed, fov, viewDist, proximity: prox });
-      console.log(`Spawning new ghost: ${newGhost ? 'Success' : 'Failed'}`);
+      logger.debug(`Spawning new ghost: ${newGhost ? 'Success' : 'Failed'}`);
       if (newGhost) {
-        console.log(`New ghost spawned at lat: ${newGhost.latlng.lat}, lng: ${newGhost.latlng.lng}`);
+        logger.info(`New ghost spawned at lat: ${newGhost.latlng.lat}, lng: ${newGhost.latlng.lng}`);
         ghosts.push(newGhost);
         Game.lastGhostSpawn = now;
         setStatus(`Et nytt spøkelse har dukket opp! (${ghosts.length}/${Game.maxGhosts})`);
@@ -1512,9 +1527,9 @@
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('./sw.js').then(registration => {
-        console.log('Service Worker registered successfully:', registration);
+        logger.info('Service Worker registered successfully:', registration);
       }).catch(error => {
-        console.log('Service Worker registration failed:', error);
+        logger.error('Service Worker registration failed:', error);
       });
     });
   }
@@ -1531,7 +1546,7 @@
 
   // Listen for app installed event
   window.addEventListener('appinstalled', () => {
-    console.log('PWA was installed');
+    logger.info('PWA was installed');
     installBtn.classList.remove('show');
     deferredPrompt = null;
   });
@@ -1557,9 +1572,9 @@
     // Log the result
     deferredPrompt.userChoice.then((choiceResult) => {
       if (choiceResult.outcome === 'accepted') {
-        console.log('User accepted the install prompt');
+        logger.info('User accepted the install prompt');
       } else {
-        console.log('User dismissed the install prompt');
+        logger.info('User dismissed the install prompt');
       }
       deferredPrompt = null;
       hideInstallModal();
