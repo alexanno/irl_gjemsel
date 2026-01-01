@@ -456,14 +456,14 @@
         <label for="ghosts">Spøkelser:</label>
         <input id="ghosts" type="number" value="5" min="1" max="100" style="width:70px"/>
         <label for="speed" title="hastighet m/s">Hastighet:</label>
-        <input id="speed" type="number" value="5.5" min="0.5" max="15" step="0.1" style="width:70px"/>
+        <input id="speed" type="number" value="1" min="0.5" max="15" step="0.1" style="width:70px"/>
       </div>
 
       <div class="row">
         <label for="fov" title="Synsfelt i grader">FOV°:</label>
         <input id="fov" type="number" value="95" min="30" max="180" step="5" style="width:70px"/>
         <label for="viewDist" title="Synsrekkevidde i meter">Rekkevidde(m):</label>
-        <input id="viewDist" type="number" value="70" min="10" max="200" step="5" style="width:80px"/>
+        <input id="viewDist" type="number" value="10" min="10" max="200" step="5" style="width:80px"/>
       </div>
 
       <div class="row hidden">
@@ -827,7 +827,7 @@
     const c=center||map.getCenter();
     const llCenter = { lat: c.lat, lng: c.lng };
     boundaryCircleCenter = llCenter;
-    boundaryCircleRadiusM = 200;
+    boundaryCircleRadiusM = 50;
     const circle=turf.circle([llCenter.lng,llCenter.lat], boundaryCircleRadiusM/1000, {units:'kilometers',steps:64});
     setBoundary(circle, true);
   }
