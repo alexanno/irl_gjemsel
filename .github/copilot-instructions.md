@@ -1,0 +1,20 @@
+# Copilot Instructions for IRL Gjemsel
+
+- **Stack & entry**: Single-page PWA in [index.html](index.html) with inline JS; no bundler or package manager—edit the HTML/JS/CSS directly and keep it lean.
+- **Local run**: Serve over HTTPS for geolocation/PWA; run `node server.js` (generates a self-signed cert via OpenSSL) then open https://localhost:8443 ([server.js#L1-L120](server.js#L1-L120)).
+- **Map rendering**: MapLibre + OpenFreeMap style with GeoJSON sources for boundary, player, ghosts, obstacles; layers added in [index.html#L620-L705](index.html#L620-L705). Use `refreshSource`/`ensureSources` when adding map data.
+- **Firebase leaderboard**: Firebase Realtime DB (compat SDK) initialized with inline keys; top scores pulled/pushed from `leaderboard` node and top-10 prompt flow lives in [index.html#L430-L570](index.html#L430-L570). No env vars—keys already embedded.
+- **Game state model**: `Game` struct tracks phases (`idle`, `countdown`, `running`, `caught`), timers, spawn cadence; defaults set in [index.html#L690-L715](index.html#L690-L715). Touch these constants to tune pacing instead of scattering magic numbers.
+- **Sound system**: Geiger-counter click rate reflects nearest ghost distance; managed by `SoundSystem` with `toggle()/updateDistance()/tick()` in [index.html#L715-L770](index.html#L715-L770). Respect `maxDistance/minInterval` when changing proximity cues.
+- **Boundaries**: Default circle generated around player if none provided; optional GeoJSON upload handled in [index.html#L820-L970](index.html#L820-L970). Shrink-to-80% logic (with repositioning of ghosts/player) at [index.html#L880-L1045](index.html#L880-L1045).
+- **Player position**: GPS watch plus manual map clicks funnel through `ensurePlayer` with boundary/obstacle validation in [index.html#L970-L1035](index.html#L970-L1035). Keep validation here if adding new movement sources.
+- **Ghost AI**: `Ghost` class handles patrol → chase → search modes, cone FOV, obstacle/boundary checks, and collision avoidance; see [index.html#L1035-L1280](index.html#L1035-L1280). Update `steer`/`seesPlayer` if altering detection rules.
+- **Spawning & scaling**: Initial ghosts seeded in `startGame`, periodic spawns every `spawnGhostInterval` up to `maxGhosts` in `tick` ([index.html#L1320-L1460](index.html#L1320-L1460)). Adjust these knobs to change difficulty; keep `spawnGhost` respecting boundary and 100m safety to player.
+- **Game loop**: `tick` runs every `Game.tickMs`, drives ghost steering, detection, and sound updates; stopwatch + shrink timing handled in [index.html#L1285-L1390](index.html#L1285-L1390). Maintain early returns when game not running.
+- **End-of-round flow**: `gameOver` stops timers, releases Wake Lock, stops sound, then writes high scores before showing overlay ([index.html#L1460-L1505](index.html#L1460-L1505)). Reset path in `resetGame` directly clears ghosts/UI state.
+- **UI controls**: Buttons for start/reset/sound, HUD/leaderboard toggles, welcome modal; event wiring at [index.html#L1455-L1495](index.html#L1455-L1495). Keep labels consistent (Norwegian copy).
+- **PWA**: Service worker registered in-page with install prompt modal ([index.html#L1508-L1620](index.html#L1508-L1620)); cache strategy and offline fallback defined in [sw.js#L1-L94](sw.js#L1-L94). Bump `CACHE_NAME` when changing static assets.
+- **Manifest/icons**: PWA metadata and shortcuts in [manifest.json](manifest.json); icons live under `/icons`.
+- **Testing**: No automated tests; manual playtest via HTTPS server is the norm. Verify GPS permission flow, countdown→run transitions, spawn cadence, and leaderboard writes when changing core logic.
+- **Style conventions**: Vanilla JS inside IIFEs, minimal globals, system UI fonts; keep CSS/JS in the same HTML file unless there’s a strong reason to split.
+- **Gotchas**: Geolocation requires HTTPS; wake lock may fail silently. Obstacles layer exists but isn’t populated—check interactions before enabling. Cache-control headers in `server.js` disable aggressive caching for local dev.
