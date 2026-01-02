@@ -465,7 +465,7 @@
         <label for="ghosts">Spøkelser:</label>
         <input id="ghosts" type="number" value="5" min="1" max="100" style="width:70px"/>
         <label for="speed" title="Grunnhastighet (balansert spøkelse)">Hastighet(m/s):</label>
-        <input id="speed" type="number" value="5" min="0.5" max="15" step="0.5" style="width:70px"/>
+        <input id="speed" type="number" value="1" min="0.5" max="15" step="0.5" style="width:70px"/>
       </div>
 
       <div class="row hidden">
@@ -589,7 +589,78 @@
       chaseMaxTurnRate: 160,             // Max heading change in chase mode (deg/s)
       searchMaxTurnRate: 100,            // Max heading change in search mode (deg/s)
       patrolMaxTurnRate: 60,             // Max heading change in patrol mode (deg/s)
-      searchSpeedFactor: 0.75            // Speed multiplier in search mode
+      searchSpeedFactor: 0.75,           // Speed multiplier in search mode
+      
+      // Ghost categories with different characteristics
+      // Speed is defined as a factor of the base (balanced) speed
+      categories: {
+        fast_runner: {
+          name: 'Fast Runner',
+          speedFactor: 1.4,  // 40% faster than balanced
+          viewDist: 50,
+          fov: 90,
+          color: '#ff6600',  // Orange
+          coneColor: '#ffcc99'
+        },
+        watcher: {
+          name: 'Watcher',
+          speedFactor: 0.6,  // 40% slower than balanced
+          viewDist: 100,
+          fov: 120,
+          color: '#9933ff',  // Purple
+          coneColor: '#e6ccff'
+        },
+        balanced: {
+          name: 'Balanced',
+          speedFactor: 1.0,  // Base speed
+          viewDist: 70,
+          fov: 95,
+          color: '#ff6666',  // Red (default)
+          coneColor: '#ffcccc'
+        },
+        elite: {
+          name: 'Elite',
+          speedFactor: 1.4,  // 40% faster than balanced
+          viewDist: 100,
+          fov: 110,
+          color: '#cc0000',  // Dark Red
+          coneColor: '#ff9999'
+        }
+      }
+    },
+
+    // Difficulty settings
+    difficulty: {
+      default: 'medium',
+      levels: {
+        easy: {
+          name: 'Lett',
+          categories: {
+            balanced: 0.6,
+            fast_runner: 0.25,
+            watcher: 0.15,
+            elite: 0
+          }
+        },
+        medium: {
+          name: 'Middels',
+          categories: {
+            balanced: 0.35,
+            fast_runner: 0.3,
+            watcher: 0.3,
+            elite: 0.05
+          }
+        },
+        hard: {
+          name: 'Vanskelig',
+          categories: {
+            balanced: 0.2,
+            fast_runner: 0.35,
+            watcher: 0.35,
+            elite: 0.1
+          }
+        }
+      }
     },
 
     // Player settings
@@ -912,9 +983,9 @@
     shrinkTimeSec:CONFIG.boundary.shrinkTimeSeconds,
     spawnGhostInterval: CONFIG.game.spawnGhostIntervalSeconds,
     lastGhostSpawn: null,
-    maxGhosts: 25, // Maximum number of ghosts that can be spawned
-    difficulty: 'medium', // Default difficulty
-    baseSpeed: 5 // Default base speed for balanced ghosts
+    maxGhosts: CONFIG.game.maxGhosts,
+    difficulty: CONFIG.difficulty.default, // Default difficulty
+    baseSpeed: CONFIG.ghost.defaultSpeed // Default base speed for balanced ghosts
   };
 
   // Geometri
@@ -1155,11 +1226,11 @@
 
   // --- Spøkelse ---
   function selectGhostCategory(difficulty) {
-    if (!DIFFICULTY_SETTINGS[difficulty]) {
+    if (!CONFIG.difficulty.levels[difficulty]) {
       return 'balanced';  // Fallback to balanced for invalid difficulty
     }
     
-    const weights = DIFFICULTY_SETTINGS[difficulty].categories;
+    const weights = CONFIG.difficulty.levels[difficulty].categories;
     const rand = Math.random();
     let cumulative = 0;
     
@@ -1191,9 +1262,9 @@
       this.heading=Math.random()*360;
       
       // Use category if provided, otherwise use individual options
-      if (opts.category && GHOST_CATEGORIES[opts.category]) {
-        const cat = GHOST_CATEGORIES[opts.category];
-        const baseSpeed = opts.baseSpeed || 5;
+      if (opts.category && CONFIG.ghost.categories[opts.category]) {
+        const cat = CONFIG.ghost.categories[opts.category];
+        const baseSpeed = opts.baseSpeed || CONFIG.ghost.defaultSpeed;
         this.category = opts.category;
         this.speed = baseSpeed * cat.speedFactor;
         this.fov = cat.fov;
@@ -1203,9 +1274,9 @@
       } else {
         // Fallback to balanced category defaults for custom ghosts
         this.category = 'custom';
-        this.speed = opts.speed || 5;
-        this.fov = opts.fov || 95;
-        this.viewDist = opts.viewDist || 70;
+        this.speed = opts.speed || CONFIG.ghost.defaultSpeed;
+        this.fov = opts.fov || CONFIG.ghost.defaultFOV;
+        this.viewDist = opts.viewDist || CONFIG.ghost.defaultViewDistance;
         this.color = opts.color || '#ff6666';
         this.coneColor = opts.coneColor || '#ffcccc';
       }
@@ -1494,12 +1565,12 @@
     requestWakeLock();
     caughtEl.style.display='none';
 
-    const n=Math.max(1, Math.min(100, Number(inputGhosts.value||3)));
-    const difficulty = inputDifficulty.value || 'medium';
+    const n=Math.max(1, Math.min(100, Number(inputGhosts.value||CONFIG.ghost.defaultCount)));
+    const difficulty = inputDifficulty.value || CONFIG.difficulty.default;
     Game.difficulty = difficulty;
-    const baseSpeed = Number(inputSpeed.value || 5);
+    const baseSpeed = Number(inputSpeed.value || CONFIG.ghost.defaultSpeed);
     Game.baseSpeed = baseSpeed;
-    const prox=Number(inputProx.value||0);
+    const prox=Number(inputProx.value||CONFIG.ghost.defaultProximity);
 
     const bb=turf.bbox(boundaryPoly);
     let created=0, safety=0;
@@ -1554,7 +1625,7 @@
       Game.lastGhostSpawn = now;
     } else if (ghosts.length < Game.maxGhosts && 
                (now - Game.lastGhostSpawn) / 1000 >= Game.spawnGhostInterval) {
-      const prox = Number(inputProx.value || 0);
+      const prox = Number(inputProx.value || CONFIG.ghost.defaultProximity);
       const category = selectGhostCategory(Game.difficulty);
       const newGhost = spawnGhost({ category, proximity: prox, baseSpeed: Game.baseSpeed });
       if (newGhost) {
