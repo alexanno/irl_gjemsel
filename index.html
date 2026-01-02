@@ -475,7 +475,7 @@
 
       <div class="row hidden">
         <label for="viewDist" title="Synsrekkevidde i meter">Rekkevidde(m):</label>
-        <input id="viewDist" type="number" value="70" min="10" max="200" step="5" style="width:80px"/>
+        <input id="viewDist" type="number" value="10" min="10" max="200" step="5" style="width:80px"/>
       </div>
 
       <div class="row hidden">
@@ -543,7 +543,86 @@
   </div>
 
 <script>
+
+/**
+ * CONFIGURATION AND INITIALIZATION
+ */
+
 (function() {
+  // ============================================================================
+  // GAME CONFIGURATION
+  // ============================================================================
+  const CONFIG = {
+    // Map settings
+    map: {
+      defaultZoom: 18,
+      defaultCenter: { lat: 58.1467, lng: 7.9956 },
+      tileStyle: 'https://tiles.openfreemap.org/styles/liberty'
+    },
+
+    // Boundary settings
+    boundary: {
+      defaultRadiusMeters: 50,           // Default boundary circle radius
+      shrinkFactor: 0.8,                 // Shrink to 80% of original size
+      shrinkTimeSeconds: 120             // Time before boundary shrinks (2 minutes)
+    },
+
+    // Game timing
+    game: {
+      tickMs: 100,                       // Game loop tick interval
+      hideSeconds: 10,                   // Countdown time before game starts
+      spawnGhostIntervalSeconds: 5,      // Time between new ghost spawns
+      maxGhosts: 25                      // Maximum number of ghosts
+    },
+
+    // Default ghost parameters (can be overridden by UI inputs)
+    ghost: {
+      defaultCount: 5,                   // Initial number of ghosts
+      defaultSpeed: 1,                   // Ghost movement speed (m/s)
+      defaultFOV: 95,                    // Field of view in degrees
+      defaultViewDistance: 10,           // Vision range in meters
+      defaultProximity: 0,               // Capture distance regardless of vision
+      separationDistance: 25,            // Distance for ghost separation behavior
+      patrolRecalcMinMs: 9000,          // Min time before recalculating patrol
+      patrolRecalcMaxMs: 15000,         // Max time before recalculating patrol
+      searchDurationMs: 6000,            // How long to search after losing player
+      chaseMaxTurnRate: 160,             // Max heading change in chase mode (deg/s)
+      searchMaxTurnRate: 100,            // Max heading change in search mode (deg/s)
+      patrolMaxTurnRate: 60,             // Max heading change in patrol mode (deg/s)
+      searchSpeedFactor: 0.75            // Speed multiplier in search mode
+    },
+
+    // Player settings
+    player: {
+      defaultAccuracyMeters: 10,         // Default GPS accuracy circle
+      minSpawnDistanceFromGhost: 10     // Minimum distance when spawning ghosts
+    },
+
+    // Turf.js circle generation
+    turf: {
+      circleSteps: 64                    // Number of steps for circle polygons
+    },
+
+    // Debug settings
+    debug: {
+      loggingLevel: 0                    // 0=off, 1=errors, 2=warnings, 3=info, 4=debug
+    }
+  };
+
+  // ============================================================================
+  // LOGGING UTILITY
+  // ============================================================================
+  window.logger = {
+    error: (...args) => { if (CONFIG.debug.loggingLevel >= 1) console.error(...args); },
+    warn: (...args) => { if (CONFIG.debug.loggingLevel >= 2) console.warn(...args); },
+    info: (...args) => { if (CONFIG.debug.loggingLevel >= 3) console.log(...args); },
+    debug: (...args) => { if (CONFIG.debug.loggingLevel >= 4) console.log(...args); }
+  };
+  const logger = window.logger; // Local alias for convenience
+
+  // ============================================================================
+  // FIREBASE CONFIGURATION
+  // ============================================================================
   // Firebase configuration and initialization
   const firebaseConfig = {
     apiKey: "AIzaSyC6Dtf_R_xe-zWORr1T4-jkpqfaNmkeHj4",
@@ -635,15 +714,12 @@
     toggleLeaderboard.textContent = leaderboard.classList.contains('min') ? '🏆' : '−';
   });
 
-  const defaultZoom = 19;
-  const defaultCenter = { lat: 58.1467, lng: 7.9956 };
-
   // --- Kart (MapLibre vector, OpenFreeMap) ---
   const map = new maplibregl.Map({
     container: 'map',
-    style: 'https://tiles.openfreemap.org/styles/liberty',
-    center: [defaultCenter.lng, defaultCenter.lat],
-    zoom: defaultZoom,
+    style: CONFIG.map.tileStyle,
+    center: [CONFIG.map.defaultCenter.lng, CONFIG.map.defaultCenter.lat],
+    zoom: CONFIG.map.defaultZoom,
     attributionControl: true
   });
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
@@ -825,9 +901,16 @@
   };
 
   const Game={
-    state:STATE.IDLE, tickMs:100, hideSeconds:10, timer:null, watcher:null,
-    startedAt:null, stopwatchTimer:null, shrunk:false, shrinkTimeSec:20,
-    spawnGhostInterval: 5, // Seconds between new ghost spawns
+    state:STATE.IDLE, 
+    tickMs:CONFIG.game.tickMs, 
+    hideSeconds:CONFIG.game.hideSeconds, 
+    timer:null, 
+    watcher:null,
+    startedAt:null, 
+    stopwatchTimer:null, 
+    shrunk:false, 
+    shrinkTimeSec:CONFIG.boundary.shrinkTimeSeconds,
+    spawnGhostInterval: CONFIG.game.spawnGhostIntervalSeconds,
     lastGhostSpawn: null,
     maxGhosts: 25, // Maximum number of ghosts that can be spawned
     difficulty: 'medium', // Default difficulty
@@ -837,7 +920,7 @@
   // Geometri
   let boundaryPoly=null; // Turf (Polygon/MultiPolygon)
   let boundaryIsCircle=false; // spesiell håndtering (radius/center)
-  let boundaryCircleCenter=null, boundaryCircleRadiusM=100; // default radius
+  let boundaryCircleCenter=null, boundaryCircleRadiusM=CONFIG.boundary.defaultRadiusMeters;
   let originalBoundaryGeom=null; // for krymp-logikk
 
   let obstaclesPolys=[];   // Turf Polygon/MultiPolygon
@@ -909,15 +992,15 @@
     try { 
       const center = turf.center(boundaryPoly);
       map.setCenter([center.geometry.coordinates[0], center.geometry.coordinates[1]]);
-      map.setZoom(defaultZoom);
+      map.setZoom(CONFIG.map.defaultZoom);
     } catch (e){}
   }
   function ensureDefaultBoundary(center){
     const c=center||map.getCenter();
     const llCenter = { lat: c.lat, lng: c.lng };
     boundaryCircleCenter = llCenter;
-    boundaryCircleRadiusM = 200;
-    const circle=turf.circle([llCenter.lng,llCenter.lat], boundaryCircleRadiusM/1000, {units:'kilometers',steps:64});
+    boundaryCircleRadiusM = CONFIG.boundary.defaultRadiusMeters;
+    const circle=turf.circle([llCenter.lng,llCenter.lat], boundaryCircleRadiusM/1000, {units:'kilometers',steps:CONFIG.turf.circleSteps});
     setBoundary(circle, true);
   }
   function shrinkBoundaryTo80(){
@@ -925,8 +1008,8 @@
     Game.shrunk = true;
 
     if (boundaryIsCircle && boundaryCircleCenter){
-      boundaryCircleRadiusM = boundaryCircleRadiusM * 0.8;
-      const circle=turf.circle([boundaryCircleCenter.lng,boundaryCircleCenter.lat], boundaryCircleRadiusM/1000, {units:'kilometers',steps:64});
+      boundaryCircleRadiusM = boundaryCircleRadiusM * CONFIG.boundary.shrinkFactor;
+      const circle=turf.circle([boundaryCircleCenter.lng,boundaryCircleCenter.lat], boundaryCircleRadiusM/1000, {units:'kilometers',steps:CONFIG.turf.circleSteps});
       boundaryPoly = circle;
       drawBoundary(circle);
 
@@ -942,7 +1025,7 @@
       return;
     }
 
-    const scale = Math.sqrt(0.8);
+    const scale = Math.sqrt(CONFIG.boundary.shrinkFactor);
     const centroid = turf.centroid(boundaryPoly).geometry.coordinates;
     function scaleCoords(coords){
       return coords.map(ring => ring.map(([lng,lat])=>{
@@ -1031,7 +1114,7 @@
     const features=[];
     if (ll){
       if (acc){
-        const accCircle = turf.circle([ll.lng,ll.lat], (acc||10)/1000, {units:'kilometers', steps:64});
+        const accCircle = turf.circle([ll.lng,ll.lat], (acc||CONFIG.player.defaultAccuracyMeters)/1000, {units:'kilometers', steps:CONFIG.turf.circleSteps});
         features.push({ type:'Feature', properties:{kind:'accuracy'}, geometry: accCircle.geometry });
       }
       features.push({ type:'Feature', properties:{kind:'player'}, geometry:{ type:'Point', coordinates:[ll.lng, ll.lat] }});
@@ -1050,7 +1133,7 @@
       return;
     }
     playerLatLng=ll;
-    updatePlayerFeatures(ll, acc||10);
+    updatePlayerFeatures(ll, acc||CONFIG.player.defaultAccuracyMeters);
   }
 
   if ("geolocation" in navigator){
@@ -1132,7 +1215,7 @@
       this.lastSeenTarget=null;
       this.searchUntil=0;
       this.patrolTarget=this.pickPatrolTarget();
-      this.patrolRecalcAt=Date.now()+8000+Math.random()*4000;
+      this.patrolRecalcAt=Date.now()+CONFIG.ghost.patrolRecalcMinMs+Math.random()*(CONFIG.ghost.patrolRecalcMaxMs-CONFIG.ghost.patrolRecalcMinMs);
 
       this.markerFeature={
         type:'Feature',
@@ -1206,7 +1289,7 @@
         const snapshot={lat:playerLL.lat, lng:playerLL.lng};
         this.mode='chase';
         this.lastSeenTarget=snapshot;
-        this.searchUntil=now+6000;
+        this.searchUntil=now+CONFIG.ghost.searchDurationMs;
       } else if (this.mode==='chase' && this.lastSeenTarget){
         this.mode='search';
       } else if (this.mode==='search' && (!this.lastSeenTarget || now>this.searchUntil)){
@@ -1227,29 +1310,29 @@
 
       if (this.mode==='chase' && playerLL){
         desiredHeading=bearingTo(this.latlng, playerLL);
-        this.heading=clampHeadingDiff(this.heading, desiredHeading, 160*dt);
+        this.heading=clampHeadingDiff(this.heading, desiredHeading, CONFIG.ghost.chaseMaxTurnRate*dt);
       } else if (this.mode==='search' && this.lastSeenTarget){
         desiredHeading=bearingTo(this.latlng, this.lastSeenTarget);
         const sweep=Math.sin(now/500)*35;
         desiredHeading=(desiredHeading+sweep+360)%360;
-        moveSpeed=this.speed*0.75;
-        this.heading=clampHeadingDiff(this.heading, desiredHeading, 100*dt);
+        moveSpeed=this.speed*CONFIG.ghost.searchSpeedFactor;
+        this.heading=clampHeadingDiff(this.heading, desiredHeading, CONFIG.ghost.searchMaxTurnRate*dt);
         if (metersBetween(this.latlng, this.lastSeenTarget)<8){
           this.mode='patrol';
           this.lastSeenTarget=null;
           this.searchUntil=0;
           this.patrolTarget=this.pickPatrolTarget();
-          this.patrolRecalcAt=now+9000+Math.random()*6000;
+          this.patrolRecalcAt=now+CONFIG.ghost.patrolRecalcMinMs+Math.random()*(CONFIG.ghost.patrolRecalcMaxMs-CONFIG.ghost.patrolRecalcMinMs);
         }
       } else {
         if (!this.patrolTarget || !pointInside(boundaryPoly, this.patrolTarget) || metersBetween(this.latlng, this.patrolTarget)<8 || now>this.patrolRecalcAt){
           this.patrolTarget=this.pickPatrolTarget();
-          this.patrolRecalcAt=now+9000+Math.random()*6000;
+          this.patrolRecalcAt=now+CONFIG.ghost.patrolRecalcMinMs+Math.random()*(CONFIG.ghost.patrolRecalcMaxMs-CONFIG.ghost.patrolRecalcMinMs);
         }
         if (this.patrolTarget){
           desiredHeading=bearingTo(this.latlng, this.patrolTarget);
         }
-        this.heading=clampHeadingDiff(this.heading, desiredHeading, 60*dt);
+        this.heading=clampHeadingDiff(this.heading, desiredHeading, CONFIG.ghost.patrolMaxTurnRate*dt);
         const probe=moveFrom(this.latlng, this.heading, this.speed*dt*2);
         if (boundaryPoly && (!pointInside(boundaryPoly, probe) || !lineWithin(boundaryPoly, this.latlng, probe))){
           this.patrolTarget=this.pickPatrolTarget();
@@ -1263,9 +1346,9 @@
         for(const other of allGhosts){
           if (other===this || !other.latlng) continue;
           const dist=metersBetween(this.latlng, other.latlng);
-          if (!dist || dist>25) continue;
+          if (!dist || dist>CONFIG.ghost.separationDistance) continue;
           const away=bearingTo(other.latlng, this.latlng);
-          const strength=(25-dist)/25;
+          const strength=(CONFIG.ghost.separationDistance-dist)/CONFIG.ghost.separationDistance;
           const rad=away*Math.PI/180;
           vx+=Math.cos(rad)*strength;
           vy+=Math.sin(rad)*strength;
@@ -1361,18 +1444,21 @@
   }
 
   function spawnGhost(options) {
+    logger.debug('is boundaryPoly defined?', !!boundaryPoly);
     if (!boundaryPoly) return null;
     const bb = turf.bbox(boundaryPoly);
     let tries = 0;
     while (tries < 1000) {
-      tries++;
-      const rnd = turf.randomPoint(1, { bbox: bb }).features[0];
-      if (!turf.booleanPointInPolygon(rnd, boundaryPoly)) continue;
-      const [lng, lat] = rnd.geometry.coordinates;
-      const p = {lat, lng};
-      if (playerLatLng && metersBetween(p, playerLatLng) < 100) continue;
-      return new Ghost(p, options);
+        tries++;
+        const rnd = turf.randomPoint(1, { bbox: bb }).features[0];
+        if (!turf.booleanPointInPolygon(rnd, boundaryPoly)) continue;
+        const [lng, lat] = rnd.geometry.coordinates;
+        const p = {lat, lng};
+        if (playerLatLng && metersBetween(p, playerLatLng) < CONFIG.player.minSpawnDistanceFromGhost) continue;
+        if (pointInsideAnyObstacle(p)) continue;
+        return new Ghost(p, options);
     }
+    logger.warn('Failed to spawn ghost after 1000 tries.');
     return null;
   }
 
@@ -1383,7 +1469,7 @@
     try {
       wakeLock = await navigator.wakeLock.request('screen');
     } catch (err) {
-      console.log(`Failed to get Wake Lock: ${err.name}, ${err.message}`);
+      logger.warn(`Failed to get Wake Lock: ${err.name}, ${err.message}`);
     }
   }
 
@@ -1434,6 +1520,7 @@
     drawBoundary(boundaryPoly);
 
     Game.state=STATE.COUNTDOWN;
+    Game.lastGhostSpawn = null;
     countdownEl.style.display='block';
     const startTime = Date.now();
     const countdownUpdate = () => {
@@ -1462,7 +1549,8 @@
   function tick(dt){
     if (Game.state!==STATE.RUNNING || !playerLatLng) return;
     const now = Date.now();
-    if (!Game.lastGhostSpawn) {
+    logger.debug(`Time since last ghost spawn: ${Game.lastGhostSpawn ? (now - Game.lastGhostSpawn) / 1000 : 'N/A'} seconds`);
+    if (Game.lastGhostSpawn === null) {
       Game.lastGhostSpawn = now;
     } else if (ghosts.length < Game.maxGhosts && 
                (now - Game.lastGhostSpawn) / 1000 >= Game.spawnGhostInterval) {
@@ -1470,6 +1558,7 @@
       const category = selectGhostCategory(Game.difficulty);
       const newGhost = spawnGhost({ category, proximity: prox, baseSpeed: Game.baseSpeed });
       if (newGhost) {
+        logger.info(`New ghost spawned at lat: ${newGhost.latlng.lat}, lng: ${newGhost.latlng.lng}`);
         ghosts.push(newGhost);
         Game.lastGhostSpawn = now;
         setStatus(`Et nytt spøkelse har dukket opp! (${ghosts.length}/${Game.maxGhosts})`);
@@ -1564,9 +1653,9 @@
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('./sw.js').then(registration => {
-        console.log('Service Worker registered successfully:', registration);
+        logger.info('Service Worker registered successfully:', registration);
       }).catch(error => {
-        console.log('Service Worker registration failed:', error);
+        logger.error('Service Worker registration failed:', error);
       });
     });
   }
@@ -1583,7 +1672,7 @@
 
   // Listen for app installed event
   window.addEventListener('appinstalled', () => {
-    console.log('PWA was installed');
+    logger.info('PWA was installed');
     installBtn.classList.remove('show');
     deferredPrompt = null;
   });
@@ -1609,9 +1698,9 @@
     // Log the result
     deferredPrompt.userChoice.then((choiceResult) => {
       if (choiceResult.outcome === 'accepted') {
-        console.log('User accepted the install prompt');
+        logger.info('User accepted the install prompt');
       } else {
-        console.log('User dismissed the install prompt');
+        logger.info('User dismissed the install prompt');
       }
       deferredPrompt = null;
       hideInstallModal();
