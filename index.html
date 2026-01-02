@@ -453,15 +453,27 @@
 
     <div class="hidewrapper">
       <div class="row">
-        <label for="ghosts">Spøkelser:</label>
-        <input id="ghosts" type="number" value="5" min="1" max="100" style="width:70px"/>
-        <label for="speed" title="hastighet m/s">Hastighet:</label>
-        <input id="speed" type="number" value="1" min="0.5" max="15" step="0.1" style="width:70px"/>
+        <label for="difficulty">Vanskelighetsgrad:</label>
+        <select id="difficulty" style="padding:3px 6px; border-radius:4px; border:1px solid #ccc;">
+          <option value="easy">Lett</option>
+          <option value="medium" selected>Middels</option>
+          <option value="hard">Vanskelig</option>
+        </select>
       </div>
 
       <div class="row">
+        <label for="ghosts">Spøkelser:</label>
+        <input id="ghosts" type="number" value="5" min="1" max="100" style="width:70px"/>
+        <label for="speed" title="Grunnhastighet (balansert spøkelse)">Hastighet(m/s):</label>
+        <input id="speed" type="number" value="1" min="0.5" max="15" step="0.5" style="width:70px"/>
+      </div>
+
+      <div class="row hidden">
         <label for="fov" title="Synsfelt i grader">FOV°:</label>
         <input id="fov" type="number" value="95" min="30" max="180" step="5" style="width:70px"/>
+      </div>
+
+      <div class="row hidden">
         <label for="viewDist" title="Synsrekkevidde i meter">Rekkevidde(m):</label>
         <input id="viewDist" type="number" value="10" min="10" max="200" step="5" style="width:80px"/>
       </div>
@@ -488,7 +500,13 @@
     <div class="legend">
       <div>🟢 Avgrensning</div>
       <div>🔵 Du</div>
-      <div>🔴 Spøkelser + lyskjegle</div>
+      <div style="color:#ff6666">🔴 Spøkelser</div>
+      <div style="font-size:10px; margin-top:4px">
+        <span style="color:#ff6600">●</span> Rask
+        <span style="color:#9933ff">●</span> Vokter
+        <span style="color:#ff6666">●</span> Balansert
+        <span style="color:#cc0000">●</span> Elite
+      </div>
     </div>  <div id="countdown"></div>
   <div id="stopwatch"></div>
   <div id="caught">Du ble funnet! 👻</div>
@@ -513,12 +531,13 @@
     <ul>
       <li>🎯 <strong>Mål:</strong> Hold deg i live lengst mulig ved å unngå spøkelsenes synsfelt</li>
       <li>👻 <strong>Spøkelser:</strong> Røde prikker på kartet. De har en lyskjegle som viser hva de ser</li>
+      <li>🎨 <strong>Spøkelse-typer:</strong> Forskjellige farger = forskjellige egenskaper (rask, langsynt, elite)</li>
       <li>🏃‍♂️ <strong>Du:</strong> Blå prikk på kartet (GPS-posisjon). Beveg deg fysisk for å unngå spøkelsene</li>
       <li>⚡ <strong>Tips:</strong> Hold øye med kartet og spøkelsenes bevegelser. Husk å pass på biler og stolper!</li>
       <li>⏰ <strong>Områdekrymp:</strong> Etter 2 minutter krymper spilleområdet til 80%</li>
       <li>🆕 <strong>Nye spøkelser:</strong> Dukker opp med jevne mellomrom</li>
       <li>🏆 <strong>Toppliste:</strong> De som overlever lengst havner på topplisten!</li>
-      <li>⚙️ <strong>Innstillinger:</strong> Juster vanskelighetsgrad i menyen (antall spøkelser, hastighet, synsfelt, osv.)</li>
+      <li>⚙️ <strong>Innstillinger:</strong> Velg vanskelighetsgrad (lett, middels, vanskelig)</li>
     </ul>
     <button id="welcome-start">La oss begynne! 🎮</button>
   </div>
@@ -570,7 +589,78 @@
       chaseMaxTurnRate: 160,             // Max heading change in chase mode (deg/s)
       searchMaxTurnRate: 100,            // Max heading change in search mode (deg/s)
       patrolMaxTurnRate: 60,             // Max heading change in patrol mode (deg/s)
-      searchSpeedFactor: 0.75            // Speed multiplier in search mode
+      searchSpeedFactor: 0.75,           // Speed multiplier in search mode
+      
+      // Ghost categories with different characteristics
+      // Speed is defined as a factor of the base (balanced) speed
+      categories: {
+        fast_runner: {
+          name: 'Fast Runner',
+          speedFactor: 1.4,  // 40% faster than balanced
+          viewDist: 50,
+          fov: 90,
+          color: '#ff6600',  // Orange
+          coneColor: '#ffcc99'
+        },
+        watcher: {
+          name: 'Watcher',
+          speedFactor: 0.6,  // 40% slower than balanced
+          viewDist: 100,
+          fov: 120,
+          color: '#9933ff',  // Purple
+          coneColor: '#e6ccff'
+        },
+        balanced: {
+          name: 'Balanced',
+          speedFactor: 1.0,  // Base speed
+          viewDist: 70,
+          fov: 95,
+          color: '#ff6666',  // Red (default)
+          coneColor: '#ffcccc'
+        },
+        elite: {
+          name: 'Elite',
+          speedFactor: 1.4,  // 40% faster than balanced
+          viewDist: 100,
+          fov: 110,
+          color: '#cc0000',  // Dark Red
+          coneColor: '#ff9999'
+        }
+      }
+    },
+
+    // Difficulty settings
+    difficulty: {
+      default: 'medium',
+      levels: {
+        easy: {
+          name: 'Lett',
+          categories: {
+            balanced: 0.6,
+            fast_runner: 0.25,
+            watcher: 0.15,
+            elite: 0
+          }
+        },
+        medium: {
+          name: 'Middels',
+          categories: {
+            balanced: 0.35,
+            fast_runner: 0.3,
+            watcher: 0.3,
+            elite: 0.05
+          }
+        },
+        hard: {
+          name: 'Vanskelig',
+          categories: {
+            balanced: 0.2,
+            fast_runner: 0.35,
+            watcher: 0.35,
+            elite: 0.1
+          }
+        }
+      }
     },
 
     // Player settings
@@ -767,9 +857,9 @@
         source: 'ghosts',
         filter: ['==', ['get', 'kind'], 'cone'],
         paint: {
-          'fill-color': '#fcc',
+          'fill-color': ['get', 'color'],
           'fill-opacity': 0.45,
-          'fill-outline-color': '#c44'
+          'fill-outline-color': ['get', 'color']
         }
       });
       map.addLayer({
@@ -779,7 +869,7 @@
         filter: ['==', ['get', 'kind'], 'ghost'],
         paint: {
           'circle-radius': 6,
-          'circle-color': '#f66',
+          'circle-color': ['get', 'color'],
           'circle-stroke-color': '#222',
           'circle-stroke-width': 2
         }
@@ -803,7 +893,7 @@
   // UI
   const $ = (id)=>document.getElementById(id);
   const btnStart=$('btnStart'), btnReset=$('btnReset'), toggleHud=$('toggleHud');
-  const inputGhosts=$('ghosts'), inputSpeed=$('speed'), inputFov=$('fov'), inputViewDist=$('viewDist'), inputProx=$('prox');
+  const inputGhosts=$('ghosts'), inputSpeed=$('speed'), inputFov=$('fov'), inputViewDist=$('viewDist'), inputProx=$('prox'), inputDifficulty=$('difficulty');
   const fileBoundary=$('geojsonBoundary');
   const statusEl=$('status'), countdownEl=$('countdown'), caughtEl=$('caught'), stopwatchEl=$('stopwatch'), warnEl=$('warn');
   const hud=$('hud');
@@ -813,6 +903,74 @@
   });
 
   const STATE={IDLE:'idle', COUNTDOWN:'countdown', RUNNING:'running', CAUGHT:'caught'};
+  
+  // Ghost categories with different characteristics
+  // Speed is defined as a factor of the base (balanced) speed
+  const GHOST_CATEGORIES = {
+    fast_runner: {
+      name: 'Fast Runner',
+      speedFactor: 1.4,  // 40% faster than balanced
+      viewDist: 50,
+      fov: 90,
+      color: '#ff6600',  // Orange
+      coneColor: '#ffcc99'
+    },
+    watcher: {
+      name: 'Watcher',
+      speedFactor: 0.6,  // 40% slower than balanced
+      viewDist: 100,
+      fov: 120,
+      color: '#9933ff',  // Purple
+      coneColor: '#e6ccff'
+    },
+    balanced: {
+      name: 'Balanced',
+      speedFactor: 1.0,  // Base speed
+      viewDist: 70,
+      fov: 95,
+      color: '#ff6666',  // Red (default)
+      coneColor: '#ffcccc'
+    },
+    elite: {
+      name: 'Elite',
+      speedFactor: 1.4,  // 40% faster than balanced
+      viewDist: 100,
+      fov: 110,
+      color: '#cc0000',  // Dark Red
+      coneColor: '#ff9999'
+    }
+  };
+
+  const DIFFICULTY_SETTINGS = {
+    easy: {
+      name: 'Lett',
+      categories: {
+        balanced: 0.6,
+        fast_runner: 0.25,
+        watcher: 0.15,
+        elite: 0
+      }
+    },
+    medium: {
+      name: 'Middels',
+      categories: {
+        balanced: 0.35,
+        fast_runner: 0.3,
+        watcher: 0.3,
+        elite: 0.05
+      }
+    },
+    hard: {
+      name: 'Vanskelig',
+      categories: {
+        balanced: 0.2,
+        fast_runner: 0.35,
+        watcher: 0.35,
+        elite: 0.1
+      }
+    }
+  };
+
   const Game={
     state:STATE.IDLE, 
     tickMs:CONFIG.game.tickMs, 
@@ -825,7 +983,9 @@
     shrinkTimeSec:CONFIG.boundary.shrinkTimeSeconds,
     spawnGhostInterval: CONFIG.game.spawnGhostIntervalSeconds,
     lastGhostSpawn: null,
-    maxGhosts: CONFIG.game.maxGhosts
+    maxGhosts: CONFIG.game.maxGhosts,
+    difficulty: CONFIG.difficulty.default, // Default difficulty
+    baseSpeed: CONFIG.ghost.defaultSpeed // Default base speed for balanced ghosts
   };
 
   // Geometri
@@ -1065,6 +1225,26 @@
   }
 
   // --- Spøkelse ---
+  function selectGhostCategory(difficulty) {
+    if (!CONFIG.difficulty.levels[difficulty]) {
+      return 'balanced';  // Fallback to balanced for invalid difficulty
+    }
+    
+    const weights = CONFIG.difficulty.levels[difficulty].categories;
+    const rand = Math.random();
+    let cumulative = 0;
+    
+    for (const [category, weight] of Object.entries(weights)) {
+      cumulative += weight;
+      if (rand < cumulative) {
+        return category;
+      }
+    }
+    
+    // Fallback to balanced if something goes wrong
+    return 'balanced';
+  }
+
   function ghostConePolygon(points){
     const coords = points.map(p => [p.lng, p.lat]);
     if (coords.length) coords.push(coords[0]);
@@ -1080,10 +1260,28 @@
       this.id=`ghost-${Date.now()}-${Math.random().toString(16).slice(2,6)}`;
       this.latlng=ll;
       this.heading=Math.random()*360;
-      this.speed=opts.speed||CONFIG.ghost.defaultSpeed;
-      this.fov=opts.fov||CONFIG.ghost.defaultFOV;
-      this.viewDist=opts.viewDist||CONFIG.ghost.defaultViewDistance;
-      this.proximity=opts.proximity||CONFIG.ghost.defaultProximity;
+      
+      // Use category if provided, otherwise use individual options
+      if (opts.category && CONFIG.ghost.categories[opts.category]) {
+        const cat = CONFIG.ghost.categories[opts.category];
+        const baseSpeed = opts.baseSpeed || CONFIG.ghost.defaultSpeed;
+        this.category = opts.category;
+        this.speed = baseSpeed * cat.speedFactor;
+        this.fov = cat.fov;
+        this.viewDist = cat.viewDist;
+        this.color = cat.color;
+        this.coneColor = cat.coneColor;
+      } else {
+        // Fallback to balanced category defaults for custom ghosts
+        this.category = 'custom';
+        this.speed = opts.speed || CONFIG.ghost.defaultSpeed;
+        this.fov = opts.fov || CONFIG.ghost.defaultFOV;
+        this.viewDist = opts.viewDist || CONFIG.ghost.defaultViewDistance;
+        this.color = opts.color || '#ff6666';
+        this.coneColor = opts.coneColor || '#ffcccc';
+      }
+      
+      this.proximity=opts.proximity||0;
       this.mode='patrol';
       this.lastSeenTarget=null;
       this.searchUntil=0;
@@ -1092,13 +1290,13 @@
 
       this.markerFeature={
         type:'Feature',
-        properties:{kind:'ghost', id:this.id},
+        properties:{kind:'ghost', id:this.id, category:this.category, color:this.color},
         geometry:{ type:'Point', coordinates:[ll.lng, ll.lat] }
       };
       const coneGeom = ghostConePolygon(this.computeCone());
       this.coneFeature={
         type:'Feature',
-        properties:{kind:'cone', id:`cone-${this.id}`},
+        properties:{kind:'cone', id:`cone-${this.id}`, category:this.category, color:this.coneColor},
         geometry: coneGeom
       };
       ghostSourceData.features.push(this.markerFeature, this.coneFeature);
@@ -1368,9 +1566,10 @@
     caughtEl.style.display='none';
 
     const n=Math.max(1, Math.min(100, Number(inputGhosts.value||CONFIG.ghost.defaultCount)));
-    const speed=Number(inputSpeed.value||CONFIG.ghost.defaultSpeed);
-    const fov=Number(inputFov.value||CONFIG.ghost.defaultFOV);
-    const viewDist=Number(inputViewDist.value||CONFIG.ghost.defaultViewDistance);
+    const difficulty = inputDifficulty.value || CONFIG.difficulty.default;
+    Game.difficulty = difficulty;
+    const baseSpeed = Number(inputSpeed.value || CONFIG.ghost.defaultSpeed);
+    Game.baseSpeed = baseSpeed;
     const prox=Number(inputProx.value||CONFIG.ghost.defaultProximity);
 
     const bb=turf.bbox(boundaryPoly);
@@ -1382,7 +1581,9 @@
       const [lng,lat]=rnd.geometry.coordinates;
       const p={lat,lng};
       if (pointInsideAnyObstacle(p)) continue;
-      ghosts.push(new Ghost(p, {speed,fov,viewDist,proximity:prox}));
+      
+      const category = selectGhostCategory(difficulty);
+      ghosts.push(new Ghost(p, {category, proximity:prox, baseSpeed}));
       created++;
     }
 
@@ -1424,13 +1625,9 @@
       Game.lastGhostSpawn = now;
     } else if (ghosts.length < Game.maxGhosts && 
                (now - Game.lastGhostSpawn) / 1000 >= Game.spawnGhostInterval) {
-      const speed = Number(inputSpeed.value || CONFIG.ghost.defaultSpeed);
-      const fov = Number(inputFov.value || CONFIG.ghost.defaultFOV);
-      const viewDist = Number(inputViewDist.value || CONFIG.ghost.defaultViewDistance);
       const prox = Number(inputProx.value || CONFIG.ghost.defaultProximity);
-      logger.debug('parameters for new ghost:', { speed, fov, viewDist, prox });
-      const newGhost = spawnGhost({ speed, fov, viewDist, proximity: prox });
-      logger.debug(`Spawning new ghost: ${newGhost ? 'Success' : 'Failed'}`);
+      const category = selectGhostCategory(Game.difficulty);
+      const newGhost = spawnGhost({ category, proximity: prox, baseSpeed: Game.baseSpeed });
       if (newGhost) {
         logger.info(`New ghost spawned at lat: ${newGhost.latlng.lat}, lng: ${newGhost.latlng.lng}`);
         ghosts.push(newGhost);
