@@ -455,8 +455,8 @@
       <div class="row">
         <label for="difficulty">Vanskelighetsgrad:</label>
         <select id="difficulty" style="padding:3px 6px; border-radius:4px; border:1px solid #ccc;">
-          <option value="easy">Lett</option>
-          <option value="medium" selected>Middels</option>
+          <option value="easy" selected>Lett</option>
+          <option value="medium">Middels</option>
           <option value="hard">Vanskelig</option>
         </select>
       </div>
@@ -641,10 +641,25 @@
 
     // Difficulty settings
     difficulty: {
-      default: 'medium',
+      default: 'easy',
       levels: {
         easy: {
           name: 'Lett',
+          speedMultiplier: 1.0,      // Ghosts move at normal speed
+          turnRateMultiplier: 0.5,   // Ghosts rotate/steer more slowly
+          viewDistMultiplier: 0.4,   // Much narrower vision range for all categories
+          categories: {
+            balanced: 0.7,
+            fast_runner: 0,
+            watcher: 0.3,
+            elite: 0
+          }
+        },
+        medium: {
+          name: 'Middels',
+          speedMultiplier: 1.0,
+          turnRateMultiplier: 1.0,
+          viewDistMultiplier: 1.0,
           categories: {
             balanced: 0.6,
             fast_runner: 0.25,
@@ -652,22 +667,16 @@
             elite: 0
           }
         },
-        medium: {
-          name: 'Middels',
-          categories: {
-            balanced: 0.35,
-            fast_runner: 0.3,
-            watcher: 0.3,
-            elite: 0.05
-          }
-        },
         hard: {
           name: 'Vanskelig',
+          speedMultiplier: 1.15,
+          turnRateMultiplier: 1.2,
+          viewDistMultiplier: 1.0,
           categories: {
-            balanced: 0.2,
+            balanced: 0.1,
             fast_runner: 0.35,
-            watcher: 0.35,
-            elite: 0.1
+            watcher: 0.25,
+            elite: 0.3
           }
         }
       }
@@ -1286,21 +1295,26 @@
       this.id=`ghost-${Date.now()}-${Math.random().toString(16).slice(2,6)}`;
       this.latlng=ll;
       this.heading=Math.random()*360;
-      
+
+      const diffLevel = CONFIG.difficulty.levels[opts.difficulty] || null;
+      const speedMultiplier = diffLevel ? diffLevel.speedMultiplier : 1;
+      const viewDistMultiplier = diffLevel && diffLevel.viewDistMultiplier != null ? diffLevel.viewDistMultiplier : 1;
+      this.turnRateFactor = diffLevel ? diffLevel.turnRateMultiplier : 1;
+
       // Use category if provided, otherwise use individual options
       if (opts.category && CONFIG.ghost.categories[opts.category]) {
         const cat = CONFIG.ghost.categories[opts.category];
         const baseSpeed = opts.baseSpeed || CONFIG.ghost.defaultSpeed;
         this.category = opts.category;
-        this.speed = baseSpeed * cat.speedFactor;
+        this.speed = baseSpeed * cat.speedFactor * speedMultiplier;
         this.fov = cat.fov;
-        this.viewDist = Math.max(CONFIG.ghost.minViewDistance, getFieldRadiusM() * cat.viewDistFactor);
+        this.viewDist = Math.max(CONFIG.ghost.minViewDistance, getFieldRadiusM() * cat.viewDistFactor * viewDistMultiplier);
         this.color = cat.color;
         this.coneColor = cat.coneColor;
       } else {
         // Fallback to balanced category defaults for custom ghosts
         this.category = 'custom';
-        this.speed = opts.speed || CONFIG.ghost.defaultSpeed;
+        this.speed = (opts.speed || CONFIG.ghost.defaultSpeed) * speedMultiplier;
         this.fov = opts.fov || CONFIG.ghost.defaultFOV;
         this.viewDist = opts.viewDist || CONFIG.ghost.defaultViewDistance;
         this.color = opts.color || '#ff6666';
@@ -1407,13 +1421,13 @@
 
       if (this.mode==='chase' && playerLL){
         desiredHeading=bearingTo(this.latlng, playerLL);
-        this.heading=clampHeadingDiff(this.heading, desiredHeading, CONFIG.ghost.chaseMaxTurnRate*dt);
+        this.heading=clampHeadingDiff(this.heading, desiredHeading, CONFIG.ghost.chaseMaxTurnRate*this.turnRateFactor*dt);
       } else if (this.mode==='search' && this.lastSeenTarget){
         desiredHeading=bearingTo(this.latlng, this.lastSeenTarget);
         const sweep=Math.sin(now/500)*35;
         desiredHeading=(desiredHeading+sweep+360)%360;
         moveSpeed=this.speed*CONFIG.ghost.searchSpeedFactor;
-        this.heading=clampHeadingDiff(this.heading, desiredHeading, CONFIG.ghost.searchMaxTurnRate*dt);
+        this.heading=clampHeadingDiff(this.heading, desiredHeading, CONFIG.ghost.searchMaxTurnRate*this.turnRateFactor*dt);
         if (metersBetween(this.latlng, this.lastSeenTarget)<8){
           this.mode='patrol';
           this.lastSeenTarget=null;
@@ -1429,7 +1443,7 @@
         if (this.patrolTarget){
           desiredHeading=bearingTo(this.latlng, this.patrolTarget);
         }
-        this.heading=clampHeadingDiff(this.heading, desiredHeading, CONFIG.ghost.patrolMaxTurnRate*dt);
+        this.heading=clampHeadingDiff(this.heading, desiredHeading, CONFIG.ghost.patrolMaxTurnRate*this.turnRateFactor*dt);
         const probe=moveFrom(this.latlng, this.heading, this.speed*dt*2);
         if (boundaryPoly && (!pointInside(boundaryPoly, probe) || !lineWithin(boundaryPoly, this.latlng, probe))){
           this.patrolTarget=this.pickPatrolTarget();
@@ -1611,7 +1625,7 @@
       if (pointInsideAnyObstacle(p)) continue;
       
       const category = selectGhostCategory(difficulty);
-      ghosts.push(new Ghost(p, {category, proximity:prox, baseSpeed}));
+      ghosts.push(new Ghost(p, {category, proximity:prox, baseSpeed, difficulty}));
       created++;
     }
 
@@ -1655,7 +1669,7 @@
                (now - Game.lastGhostSpawn) / 1000 >= Game.spawnGhostInterval) {
       const prox = Number(inputProx.value || CONFIG.ghost.defaultProximity);
       const category = selectGhostCategory(Game.difficulty);
-      const newGhost = spawnGhost({ category, proximity: prox, baseSpeed: Game.baseSpeed });
+      const newGhost = spawnGhost({ category, proximity: prox, baseSpeed: Game.baseSpeed, difficulty: Game.difficulty });
       if (newGhost) {
         logger.info(`New ghost spawned at lat: ${newGhost.latlng.lat}, lng: ${newGhost.latlng.lng}`);
         ghosts.push(newGhost);
