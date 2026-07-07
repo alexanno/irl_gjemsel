@@ -463,9 +463,14 @@
 
       <div class="row">
         <label for="ghosts">Spøkelser:</label>
-        <input id="ghosts" type="number" value="5" min="1" max="100" style="width:70px"/>
+        <input id="ghosts" type="number" value="3" min="1" max="100" style="width:70px"/>
         <label for="speed" title="Grunnhastighet (balansert spøkelse)">Hastighet(m/s):</label>
         <input id="speed" type="number" value="1" min="0.5" max="15" step="0.5" style="width:70px"/>
+      </div>
+
+      <div class="row">
+        <label for="fieldSize" title="Radius på det runde spilleområdet. Spøkelsenes synsrekkevidde skaleres etter denne.">Feltstørrelse (m):</label>
+        <input id="fieldSize" type="number" value="50" min="20" max="1000" step="10" style="width:80px"/>
       </div>
 
       <div class="row hidden">
@@ -486,7 +491,7 @@
       <div class="row hidden" style="flex-direction: column; align-items: stretch;">
         <label><b>Last GeoJSON-avgrensning (valgfritt)</b></label>
         <input id="geojsonBoundary" type="file" accept=".geojson,.json,application/geo+json"/>
-        <div class="hint">Polygon/multipolygon som omkranser spilleområdet. Uten fil: sirkel 500 m.</div>
+        <div class="hint">Polygon/multipolygon som omkranser spilleområdet. Uten fil: sirkel med valgt feltstørrelse ovenfor.</div>
       </div>
     </div>
 
@@ -562,7 +567,9 @@
 
     // Boundary settings
     boundary: {
-      defaultRadiusMeters: 50,           // Default boundary circle radius
+      defaultRadiusMeters: 50,           // Default boundary circle radius (field size)
+      minRadiusMeters: 20,               // Smallest field size selectable in UI
+      maxRadiusMeters: 1000,             // Largest field size selectable in UI
       shrinkFactor: 0.8,                 // Shrink to 80% of original size
       shrinkTimeSeconds: 120             // Time before boundary shrinks (2 minutes)
     },
@@ -577,11 +584,12 @@
 
     // Default ghost parameters (can be overridden by UI inputs)
     ghost: {
-      defaultCount: 5,                   // Initial number of ghosts
+      defaultCount: 3,                   // Initial number of ghosts
       defaultSpeed: 1,                   // Ghost movement speed (m/s)
       defaultFOV: 95,                    // Field of view in degrees
-      defaultViewDistance: 10,           // Vision range in meters
+      defaultViewDistance: 5,           // Vision range in meters
       defaultProximity: 0,               // Capture distance regardless of vision
+      minViewDistance: 8,                // Floor applied after scaling view distance to field size
       separationDistance: 25,            // Distance for ghost separation behavior
       patrolRecalcMinMs: 9000,          // Min time before recalculating patrol
       patrolRecalcMaxMs: 15000,         // Max time before recalculating patrol
@@ -592,12 +600,14 @@
       searchSpeedFactor: 0.75,           // Speed multiplier in search mode
       
       // Ghost categories with different characteristics
-      // Speed is defined as a factor of the base (balanced) speed
+      // Speed is defined as a factor of the base (balanced) speed.
+      // viewDistFactor is a fraction of the current field radius (CONFIG.boundary),
+      // so vision cones scale with field size instead of overwhelming small fields.
       categories: {
         fast_runner: {
           name: 'Fast Runner',
           speedFactor: 1.4,  // 40% faster than balanced
-          viewDist: 50,
+          viewDistFactor: 0.4,
           fov: 90,
           color: '#ff6600',  // Orange
           coneColor: '#ffcc99'
@@ -605,7 +615,7 @@
         watcher: {
           name: 'Watcher',
           speedFactor: 0.6,  // 40% slower than balanced
-          viewDist: 100,
+          viewDistFactor: 0.7,
           fov: 120,
           color: '#9933ff',  // Purple
           coneColor: '#e6ccff'
@@ -613,7 +623,7 @@
         balanced: {
           name: 'Balanced',
           speedFactor: 1.0,  // Base speed
-          viewDist: 70,
+          viewDistFactor: 0.5,
           fov: 95,
           color: '#ff6666',  // Red (default)
           coneColor: '#ffcccc'
@@ -621,7 +631,7 @@
         elite: {
           name: 'Elite',
           speedFactor: 1.4,  // 40% faster than balanced
-          viewDist: 100,
+          viewDistFactor: 0.65,
           fov: 110,
           color: '#cc0000',  // Dark Red
           coneColor: '#ff9999'
@@ -893,7 +903,11 @@
   // UI
   const $ = (id)=>document.getElementById(id);
   const btnStart=$('btnStart'), btnReset=$('btnReset'), toggleHud=$('toggleHud');
-  const inputGhosts=$('ghosts'), inputSpeed=$('speed'), inputFov=$('fov'), inputViewDist=$('viewDist'), inputProx=$('prox'), inputDifficulty=$('difficulty');
+  const inputGhosts=$('ghosts'), inputSpeed=$('speed'), inputFov=$('fov'), inputViewDist=$('viewDist'), inputProx=$('prox'), inputDifficulty=$('difficulty'), inputFieldSize=$('fieldSize');
+  inputFieldSize.value = CONFIG.boundary.defaultRadiusMeters;
+  inputFieldSize.min = CONFIG.boundary.minRadiusMeters;
+  inputFieldSize.max = CONFIG.boundary.maxRadiusMeters;
+
   const fileBoundary=$('geojsonBoundary');
   const statusEl=$('status'), countdownEl=$('countdown'), caughtEl=$('caught'), stopwatchEl=$('stopwatch'), warnEl=$('warn');
   const hud=$('hud');
@@ -1066,13 +1080,25 @@
       map.setZoom(CONFIG.map.defaultZoom);
     } catch (e){}
   }
-  function ensureDefaultBoundary(center){
+  function ensureDefaultBoundary(center, radiusM){
     const c=center||map.getCenter();
     const llCenter = { lat: c.lat, lng: c.lng };
     boundaryCircleCenter = llCenter;
-    boundaryCircleRadiusM = CONFIG.boundary.defaultRadiusMeters;
+    boundaryCircleRadiusM = radiusM || CONFIG.boundary.defaultRadiusMeters;
     const circle=turf.circle([llCenter.lng,llCenter.lat], boundaryCircleRadiusM/1000, {units:'kilometers',steps:CONFIG.turf.circleSteps});
     setBoundary(circle, true);
+  }
+  // Effective radius (meters) of the current play area, used to scale ghost vision
+  // relative to field size instead of a fixed absolute distance.
+  function getFieldRadiusM(){
+    if (boundaryIsCircle && boundaryCircleRadiusM) return boundaryCircleRadiusM;
+    if (boundaryPoly){
+      try {
+        const areaM2 = turf.area(boundaryPoly);
+        if (areaM2 > 0) return Math.sqrt(areaM2 / Math.PI);
+      } catch(e){}
+    }
+    return CONFIG.boundary.defaultRadiusMeters;
   }
   function shrinkBoundaryTo80(){
     if (Game.shrunk || !boundaryPoly) return;
@@ -1268,7 +1294,7 @@
         this.category = opts.category;
         this.speed = baseSpeed * cat.speedFactor;
         this.fov = cat.fov;
-        this.viewDist = cat.viewDist;
+        this.viewDist = Math.max(CONFIG.ghost.minViewDistance, getFieldRadiusM() * cat.viewDistFactor);
         this.color = cat.color;
         this.coneColor = cat.coneColor;
       } else {
@@ -1558,8 +1584,10 @@
 
   function startGame(){
     if (!playerLatLng){ alert('Sett spillerposisjon (GPS eller trykk i kartet).'); return; }
-    if (!boundaryPoly) {
-      ensureDefaultBoundary(playerLatLng);
+    if (!boundaryPoly || boundaryIsCircle) {
+      const fieldSizeM = Math.max(CONFIG.boundary.minRadiusMeters, Math.min(CONFIG.boundary.maxRadiusMeters,
+        Number(inputFieldSize.value || CONFIG.boundary.defaultRadiusMeters)));
+      ensureDefaultBoundary(playerLatLng, fieldSizeM);
     }
     clearGhosts();
     requestWakeLock();
