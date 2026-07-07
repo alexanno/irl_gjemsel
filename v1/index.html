@@ -1,0 +1,1611 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <title>👻 IRL Gjemsel</title>
+
+  <!-- PWA Meta Tags -->
+  <meta name="theme-color" content="#2b7"/>
+  <meta name="description" content="Et AR-basert spøkelsesspill hvor du finner og fanger spøkelser i virkeligheten"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="IRL Gjemsel"/>
+  <link rel="apple-touch-icon" href="../icons/icon-192x192.png"/>
+  <link rel="manifest" href="../manifest.json"/>
+  <link rel="icon" type="image/png" href="../icons/icon-192x192.png"/>
+
+    <!-- MapLibre GL JS -->
+    <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" />
+    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+
+  <!-- Turf.js -->
+  <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+  <style>
+    /* Leaderboard styles */
+    #leaderboard {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 1000;
+      background: rgba(255,255,255,0.94);
+      padding: 10px 12px;
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+      max-width: 300px;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    #leaderboard h2 {
+      margin: 0 0 10px;
+      font-size: 16px;
+    }
+    #leaderboard-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    #leaderboard-list li {
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(0,0,0,0.1);
+    }
+    #leaderboard-list li:last-child {
+      border-bottom: none;
+    }
+    #nickname-modal {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 32px rgba(0,0,0,0.3);
+      z-index: 2000;
+      display: none;
+    }
+    #nickname-modal input {
+      width: 100%;
+      padding: 8px;
+      margin: 10px 0;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+    #nickname-modal button {
+      width: 100%;
+      padding: 8px;
+      background: #2b7;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    html, body, #map { height: 100%; margin: 0; }
+    .hidden { display: none !important; }
+    
+    /* Leaderboard styles */
+    #leaderboard {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 1000;
+      background: rgba(255,255,255,0.94);
+      padding: 10px 12px;
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+      max-width: 300px;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    #leaderboard h2 {
+      margin: 0 0 10px;
+      font-size: 16px;
+      display: inline-block;
+    }
+    #toggleLeaderboard {
+      float: right;
+      border: none;
+      background: #eee;
+      border-radius: 10px;
+      padding: 6px 8px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+    #leaderboard.min #leaderboard-list {
+      display: none;
+    }
+    #leaderboard.min h2 {
+      display: none;
+    }
+    #leaderboard.min {
+      opacity: 0.92;
+      padding: 6px;
+      background: transparent;
+      box-shadow: none;
+    }
+    #leaderboard.min #toggleLeaderboard {
+      float: none;
+      font-size: 20px;
+      padding: 8px 12px;
+      background: rgba(255,255,255,0.94);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    }
+    #leaderboard-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      clear: both;
+    }
+    #leaderboard-list li {
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(0,0,0,0.1);
+      font-size: 14px;
+    }
+    #leaderboard-list li:last-child {
+      border-bottom: none;
+    }
+    
+    /* Nickname modal styles */
+    #nickname-modal {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 32px rgba(0,0,0,0.3);
+      z-index: 2000;
+      display: none;
+      width: 300px;
+      text-align: center;
+    }
+    #nickname-modal h3 {
+      margin: 0 0 10px;
+      font-size: 18px;
+    }
+    #nickname-modal input {
+      width: calc(100% - 20px);
+      padding: 8px;
+      margin: 10px 0;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 16px;
+    }
+    #nickname-modal button {
+      width: 100%;
+      padding: 10px;
+      background: #2b7;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: 600;
+      margin-top: 10px;
+    }
+    #nickname-modal button:hover {
+      background: #1a6;
+    }
+    #hud {
+      position: absolute; top: 10px; left: 10px; z-index: 1000;
+      background: rgba(255,255,255,0.94); padding: 10px 12px; border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2); max-width: 380px;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      transition: max-height .2s ease, opacity .2s ease;
+    }
+    #hud.min .hidewrapper { display: none; }
+    #hud.min { opacity: .92; }
+    #hud h1 { margin: 0 0 6px; font-size: 16px; display: inline-block; }
+    
+    #hud .row { display: flex; gap: 8px; align-items: center; margin: 6px 0; flex-wrap: wrap; }
+    #hud label { font-size: 12px; }
+    #hud input[type="file"] { width: 100%; }
+    #hud button { padding: 3px 4px; margin-right:10px; float:left;border-radius: 10px; background: #2b7; color: #fff; font-weight: 600; cursor: pointer; }
+    #hud button.secondary { background: #777; }
+    #hud button:disabled { opacity: .6; cursor: not-allowed; }
+
+    #toggleHud{
+      float: right; border: none; background: #ffffff !important; border-radius: 1px; padding: 3px 4px;
+      cursor: pointer; font-weight: 700;
+    }
+    #status { margin-top: 6px; font-size: 13px; }
+    #countdown {
+      position: absolute; left: 50%; bottom: 80px;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.75); color: #fff; 
+      padding: 12px 24px; border-radius: 12px;
+      font-size: 24px; z-index: 1200; display: none; 
+      text-align: center; font-weight: 600;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    }
+    #stopwatch {
+      position: absolute; left: 50%; bottom: 20px;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.75); color: #fff; 
+      padding: 8px 16px; border-radius: 12px;
+      font-size: 18px; z-index: 1200; display: none; 
+      text-align: center; font-weight: 600;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    }
+    #overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.7); z-index: 1100;
+      display: none; cursor: pointer;
+    }
+    #caught {
+      position: absolute; top: 50%; left: 50%; 
+      transform: translate(-50%, -50%);
+      background: linear-gradient(to right, rgb(200,0,0), rgb(180,0,0));
+      color: #fff; padding: 24px 48px; border-radius: 16px;
+      font-size: 32px; z-index: 1200; display: none; 
+      font-weight: 800; text-align: center;
+      box-shadow: 0 4px 32px rgba(0,0,0,0.5);
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    #caught:hover {
+      transform: translate(-50%, -50%) scale(1.02);
+      box-shadow: 0 6px 40px rgba(0,0,0,0.6);
+    }
+    .legend {
+      position: absolute; right: 10px; bottom: 10px; z-index: 1000;
+      background: rgba(255,255,255,.92); padding: 8px 10px; border-radius: 10px; font-size: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,.15);
+    }
+    .hint { font-size: 12px; color: #333; line-height: 1.4; }
+    .warn {
+      position: absolute; left: 50%; bottom: 70px; transform: translateX(-50%);
+      background: rgba(255,165,0,.95); color: #000; padding: 8px 12px; border-radius: 10px; z-index: 1200; display: none;
+      font-weight: 700; font-size: 14px;
+    }
+    #welcome-modal {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      padding: 24px;
+      border-radius: 16px;
+      box-shadow: 0 4px 32px rgba(0,0,0,0.3);
+      z-index: 2000;
+      width: 90%;
+      max-width: 500px;
+      text-align: left;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    #welcome-modal h2 {
+      margin: 0 0 16px;
+      font-size: 24px;
+      color: #222;
+    }
+    #welcome-modal p {
+      margin: 8px 0;
+      line-height: 1.5;
+      color: #333;
+    }
+    #welcome-modal ul {
+      margin: 12px 0;
+      padding-left: 24px;
+    }
+    #welcome-modal li {
+      margin: 6px 0;
+      line-height: 1.4;
+    }
+    #welcome-modal button {
+      width: 100%;
+      padding: 12px;
+      background: #2b7;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: 600;
+      margin-top: 20px;
+    }
+    #welcome-modal button:hover {
+      background: #1a6;
+    }
+
+    /* Install Button Styles */
+    #installBtn {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      z-index: 999;
+      padding: 12px 20px;
+      background: linear-gradient(135deg, #2b7, #1a5);
+      color: white;
+      border: none;
+      border-radius: 24px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      display: none;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.3s ease;
+    }
+    #installBtn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+    }
+    #installBtn:active {
+      transform: translateY(0);
+    }
+    #installBtn.show {
+      display: flex;
+    }
+
+    /* Install Modal Styles */
+    #installModal {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      padding: 30px;
+      border-radius: 16px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+      z-index: 2001;
+      display: none;
+      max-width: 90%;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    #installModal.show {
+      display: block;
+    }
+    #installModal h3 {
+      margin: 0 0 15px;
+      font-size: 20px;
+      color: #333;
+    }
+    #installModal p {
+      margin: 0 0 20px;
+      color: #666;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    #installModal .button-group {
+      display: flex;
+      gap: 10px;
+      margin-top: 25px;
+    }
+    #installModal button {
+      flex: 1;
+      padding: 12px 16px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+    #installModal .btn-install {
+      background: #2b7;
+      color: white;
+    }
+    #installModal .btn-install:hover {
+      background: #1a6;
+    }
+    #installModal .btn-cancel {
+      background: #f0f0f0;
+      color: #333;
+    }
+    #installModal .btn-cancel:hover {
+      background: #e0e0e0;
+    }
+    #installModalOverlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 2000;
+      display: none;
+    }
+    #installModalOverlay.show {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="overlay"></div>
+
+  <!-- Install Button -->
+  <button id="installBtn" title="Installer appen">
+    <span>📲</span>
+    <span>Installer app</span>
+  </button>
+
+  <!-- Install Modal -->
+  <div id="installModalOverlay"></div>
+  <div id="installModal">
+    <h3>📲 Installer IRL Gjemsel</h3>
+    <p>Installer appen på din enhet for å få enklere tilgang og bedre opplevelse.</p>
+    <div class="button-group">
+      <button class="btn-install" id="confirmInstall">Installer</button>
+      <button class="btn-cancel" id="cancelInstall">Avbryt</button>
+    </div>
+  </div>
+
+  <div id="hud" class="min">
+    <button id="toggleHud" title="Minimer/utvid">⚙️</button>
+    <h1>IRL Spøkelsesspill 👻</h1>
+    
+
+    <div class="row">
+      <button id="btnStart">Start (20s gjemmetid)</button>
+      <button id="btnReset" class="secondary">Reset</button>
+    </div>
+
+    <div class="hidewrapper">
+      <div class="row">
+        <label for="ghosts">Spøkelser:</label>
+        <input id="ghosts" type="number" value="5" min="1" max="100" style="width:70px"/>
+        <label for="speed" title="hastighet m/s">Hastighet:</label>
+        <input id="speed" type="number" value="1" min="0.5" max="15" step="0.1" style="width:70px"/>
+      </div>
+
+      <div class="row">
+        <label for="fov" title="Synsfelt i grader">FOV°:</label>
+        <input id="fov" type="number" value="95" min="30" max="180" step="5" style="width:70px"/>
+        <label for="viewDist" title="Synsrekkevidde i meter">Rekkevidde(m):</label>
+        <input id="viewDist" type="number" value="10" min="10" max="200" step="5" style="width:80px"/>
+      </div>
+
+      <div class="row hidden">
+        <label for="prox" title="Fanges innenfor denne avstanden, uansett syn">Nærhet(m):</label>
+        <input id="prox" type="number" value="0" min="1" max="30" step="1" style="width:80px"/>
+      </div>
+
+      <div class="row hidden" style="flex-direction: column; align-items: stretch;">
+        <label><b>Last GeoJSON-avgrensning (valgfritt)</b></label>
+        <input id="geojsonBoundary" type="file" accept=".geojson,.json,application/geo+json"/>
+        <div class="hint">Polygon/multipolygon som omkranser spilleområdet. Uten fil: sirkel 500 m.</div>
+      </div>
+    </div>
+
+
+
+    <div id="status" class="hint">
+      Klargjøring… gi tillatelse til posisjon (GPS). Du kan også trykke i kartet for å sette posisjon manuelt.
+    </div>
+  </div>
+
+    <div class="legend">
+      <div>🟢 Avgrensning</div>
+      <div>🔵 Du</div>
+      <div>🔴 Spøkelser + lyskjegle</div>
+    </div>  <div id="countdown"></div>
+  <div id="stopwatch"></div>
+  <div id="caught">Du ble funnet! 👻</div>
+  <div id="warn" class="warn"></div>
+
+  <div id="leaderboard" class="min">
+    <h2>Toppliste 🏆</h2>
+    <button id="toggleLeaderboard" title="Minimer/utvid">🏆</button>
+    <ul id="leaderboard-list"></ul>
+  </div>
+
+  <div id="nickname-modal">
+    <h3>Gratulerer! Du er på topp 10!</h3>
+    <p>Skriv inn navnet ditt:</p>
+    <input type="text" id="nickname-input" maxlength="50" placeholder="Navn">
+    <button id="save-nickname">Lagre</button>
+  </div>
+
+  <div id="welcome-modal">
+    <h2>Velkommen til IRL Gjemsel! 👻</h2>
+    <p><strong>Dette er et fysisk gjemselspill hvor du må løpe fra spøkelser i virkeligheten!</strong></p>
+    <ul>
+      <li>🎯 <strong>Mål:</strong> Hold deg i live lengst mulig ved å unngå spøkelsenes synsfelt</li>
+      <li>👻 <strong>Spøkelser:</strong> Røde prikker på kartet. De har en lyskjegle som viser hva de ser</li>
+      <li>🏃‍♂️ <strong>Du:</strong> Blå prikk på kartet (GPS-posisjon). Beveg deg fysisk for å unngå spøkelsene</li>
+      <li>⚡ <strong>Tips:</strong> Hold øye med kartet og spøkelsenes bevegelser. Husk å pass på biler og stolper!</li>
+      <li>⏰ <strong>Områdekrymp:</strong> Etter 2 minutter krymper spilleområdet til 80%</li>
+      <li>🆕 <strong>Nye spøkelser:</strong> Dukker opp med jevne mellomrom</li>
+      <li>🏆 <strong>Toppliste:</strong> De som overlever lengst havner på topplisten!</li>
+      <li>⚙️ <strong>Innstillinger:</strong> Juster vanskelighetsgrad i menyen (antall spøkelser, hastighet, synsfelt, osv.)</li>
+    </ul>
+    <button id="welcome-start">La oss begynne! 🎮</button>
+  </div>
+
+<script>
+
+/**
+ * CONFIGURATION AND INITIALIZATION
+ */
+
+(function() {
+  // ============================================================================
+  // GAME CONFIGURATION
+  // ============================================================================
+  const CONFIG = {
+    // Map settings
+    map: {
+      defaultZoom: 18,
+      defaultCenter: { lat: 58.1467, lng: 7.9956 },
+      tileStyle: 'https://tiles.openfreemap.org/styles/liberty'
+    },
+
+    // Boundary settings
+    boundary: {
+      defaultRadiusMeters: 50,           // Default boundary circle radius
+      shrinkFactor: 0.8,                 // Shrink to 80% of original size
+      shrinkTimeSeconds: 120             // Time before boundary shrinks (2 minutes)
+    },
+
+    // Game timing
+    game: {
+      tickMs: 100,                       // Game loop tick interval
+      hideSeconds: 10,                   // Countdown time before game starts
+      spawnGhostIntervalSeconds: 5,      // Time between new ghost spawns
+      maxGhosts: 25                      // Maximum number of ghosts
+    },
+
+    // Default ghost parameters (can be overridden by UI inputs)
+    ghost: {
+      defaultCount: 5,                   // Initial number of ghosts
+      defaultSpeed: 1,                   // Ghost movement speed (m/s)
+      defaultFOV: 95,                    // Field of view in degrees
+      defaultViewDistance: 10,           // Vision range in meters
+      defaultProximity: 0,               // Capture distance regardless of vision
+      separationDistance: 25,            // Distance for ghost separation behavior
+      patrolRecalcMinMs: 9000,          // Min time before recalculating patrol
+      patrolRecalcMaxMs: 15000,         // Max time before recalculating patrol
+      searchDurationMs: 6000,            // How long to search after losing player
+      chaseMaxTurnRate: 160,             // Max heading change in chase mode (deg/s)
+      searchMaxTurnRate: 100,            // Max heading change in search mode (deg/s)
+      patrolMaxTurnRate: 60,             // Max heading change in patrol mode (deg/s)
+      searchSpeedFactor: 0.75            // Speed multiplier in search mode
+    },
+
+    // Player settings
+    player: {
+      defaultAccuracyMeters: 10,         // Default GPS accuracy circle
+      minSpawnDistanceFromGhost: 10     // Minimum distance when spawning ghosts
+    },
+
+    // Turf.js circle generation
+    turf: {
+      circleSteps: 64                    // Number of steps for circle polygons
+    },
+
+    // Debug settings
+    debug: {
+      loggingLevel: 0                    // 0=off, 1=errors, 2=warnings, 3=info, 4=debug
+    }
+  };
+
+  // ============================================================================
+  // LOGGING UTILITY
+  // ============================================================================
+  window.logger = {
+    error: (...args) => { if (CONFIG.debug.loggingLevel >= 1) console.error(...args); },
+    warn: (...args) => { if (CONFIG.debug.loggingLevel >= 2) console.warn(...args); },
+    info: (...args) => { if (CONFIG.debug.loggingLevel >= 3) console.log(...args); },
+    debug: (...args) => { if (CONFIG.debug.loggingLevel >= 4) console.log(...args); }
+  };
+  const logger = window.logger; // Local alias for convenience
+
+  // ============================================================================
+  // FIREBASE CONFIGURATION
+  // ============================================================================
+  // Firebase configuration and initialization
+  const firebaseConfig = {
+    apiKey: "AIzaSyC6Dtf_R_xe-zWORr1T4-jkpqfaNmkeHj4",
+    authDomain: "irl-gjemsel.firebaseapp.com",
+    databaseURL: "https://irl-gjemsel-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "irl-gjemsel",
+    storageBucket: "irl-gjemsel.firebasestorage.app",
+    messagingSenderId: "809549687443",
+    appId: "1:809549687443:web:4fc9a3d18a5205dadefb66"
+  };
+  
+  // Initialize Firebase
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+  const leaderboardRef = db.ref('leaderboard');
+  
+  // Configure database URL explicitly
+  db.refFromURL('https://irl-gjemsel-default-rtdb.europe-west1.firebasedatabase.app');
+
+  // Leaderboard functions
+  function updateLeaderboardDisplay(scores) {
+    const leaderboardList = document.getElementById('leaderboard-list');
+    leaderboardList.innerHTML = '';
+    scores.forEach((score, index) => {
+      const li = document.createElement('li');
+      const time = Math.floor(score.time);
+      const minutes = Math.floor(time / 60);
+      const seconds = (time % 60).toString().padStart(2, '0');
+      li.textContent = `${index + 1}. ${score.playerName} - ${minutes}:${seconds} (👻 ${score.ghostCount})`;
+      leaderboardList.appendChild(li);
+    });
+  }
+
+  function loadLeaderboard() {
+    leaderboardRef.orderByChild('time').limitToLast(5).once('value', snapshot => {
+      const scores = [];
+      snapshot.forEach(childSnapshot => {
+        scores.push(childSnapshot.val());
+      });
+      scores.sort((a, b) => b.time - a.time);
+      updateLeaderboardDisplay(scores);
+    });
+  }
+
+  async function checkHighScore(time, ghostCount) {
+    let isTop10 = false;
+    const scores = [];
+    await leaderboardRef.orderByChild('time').once('value', snapshot => {
+      snapshot.forEach(childSnapshot => {
+        scores.push(childSnapshot.val());
+      });
+    });
+    scores.sort((a, b) => b.time - a.time);
+    if (scores.length < 10 || time > scores[9].time) {
+      isTop10 = true;
+    }
+    if (isTop10) {
+      return new Promise((resolve) => {
+        const modal = document.getElementById('nickname-modal');
+        const input = document.getElementById('nickname-input');
+        const saveBtn = document.getElementById('save-nickname');
+        modal.style.display = 'block';
+        saveBtn.onclick = () => {
+          const playerName = input.value.trim();
+          if (playerName) {
+            leaderboardRef.push({
+              playerName,
+              time,
+              ghostCount,
+              timestamp: firebase.database.ServerValue.TIMESTAMP
+            });
+            modal.style.display = 'none';
+            loadLeaderboard();
+            resolve();
+          }
+        };
+      });
+    }
+  }
+
+  // Load leaderboard on startup
+  loadLeaderboard();
+
+  // Setup leaderboard toggle
+  const toggleLeaderboard = document.getElementById('toggleLeaderboard');
+  toggleLeaderboard.addEventListener('click', () => {
+    const leaderboard = document.getElementById('leaderboard');
+    leaderboard.classList.toggle('min');
+    toggleLeaderboard.textContent = leaderboard.classList.contains('min') ? '🏆' : '−';
+  });
+
+  // --- Kart (MapLibre vector, OpenFreeMap) ---
+  const map = new maplibregl.Map({
+    container: 'map',
+    style: CONFIG.map.tileStyle,
+    center: [CONFIG.map.defaultCenter.lng, CONFIG.map.defaultCenter.lat],
+    zoom: CONFIG.map.defaultZoom,
+    attributionControl: true
+  });
+  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
+
+  let mapReady = false;
+  const boundarySourceData = { type: 'FeatureCollection', features: [] };
+  const playerSourceData = { type: 'FeatureCollection', features: [] };
+  const ghostSourceData = { type: 'FeatureCollection', features: [] };
+  const obstacleSourceData = { type: 'FeatureCollection', features: [] };
+
+  function refreshSource(name, data) {
+    if (!mapReady) return;
+    const src = map.getSource(name);
+    if (src) src.setData(data);
+  }
+
+  function ensureSources() {
+    if (!mapReady) return;
+
+    if (!map.getSource('boundary')) {
+      map.addSource('boundary', { type: 'geojson', data: boundarySourceData });
+      map.addLayer({
+        id: 'boundary-fill',
+        type: 'fill',
+        source: 'boundary',
+        paint: { 'fill-color': '#2a2', 'fill-opacity': 0.06 }
+      });
+      map.addLayer({
+        id: 'boundary-line',
+        type: 'line',
+        source: 'boundary',
+        paint: { 'line-color': '#2a2', 'line-width': 2 }
+      });
+    }
+
+    if (!map.getSource('player')) {
+      map.addSource('player', { type: 'geojson', data: playerSourceData });
+      map.addLayer({
+        id: 'player-accuracy',
+        type: 'fill',
+        source: 'player',
+        filter: ['==', ['get', 'kind'], 'accuracy'],
+        paint: { 'fill-color': '#39f', 'fill-opacity': 0.08 }
+      });
+      map.addLayer({
+        id: 'player-marker',
+        type: 'circle',
+        source: 'player',
+        filter: ['==', ['get', 'kind'], 'player'],
+        paint: {
+          'circle-radius': 7,
+          'circle-color': '#9cf',
+          'circle-stroke-color': '#06f',
+          'circle-stroke-width': 2
+        }
+      });
+    }
+
+    if (!map.getSource('ghosts')) {
+      map.addSource('ghosts', { type: 'geojson', data: ghostSourceData });
+      map.addLayer({
+        id: 'ghost-cones',
+        type: 'fill',
+        source: 'ghosts',
+        filter: ['==', ['get', 'kind'], 'cone'],
+        paint: {
+          'fill-color': '#fcc',
+          'fill-opacity': 0.45,
+          'fill-outline-color': '#c44'
+        }
+      });
+      map.addLayer({
+        id: 'ghost-markers',
+        type: 'circle',
+        source: 'ghosts',
+        filter: ['==', ['get', 'kind'], 'ghost'],
+        paint: {
+          'circle-radius': 6,
+          'circle-color': '#f66',
+          'circle-stroke-color': '#222',
+          'circle-stroke-width': 2
+        }
+      });
+    }
+
+    if (!map.getSource('obstacles')) {
+      map.addSource('obstacles', { type: 'geojson', data: obstacleSourceData });
+    }
+  }
+
+  map.on('load', () => {
+    mapReady = true;
+    ensureSources();
+    refreshSource('boundary', boundarySourceData);
+    refreshSource('player', playerSourceData);
+    refreshSource('ghosts', ghostSourceData);
+    refreshSource('obstacles', obstacleSourceData);
+  });
+
+  // UI
+  const $ = (id)=>document.getElementById(id);
+  const btnStart=$('btnStart'), btnReset=$('btnReset'), toggleHud=$('toggleHud');
+  const inputGhosts=$('ghosts'), inputSpeed=$('speed'), inputFov=$('fov'), inputViewDist=$('viewDist'), inputProx=$('prox');
+  const fileBoundary=$('geojsonBoundary');
+  const statusEl=$('status'), countdownEl=$('countdown'), caughtEl=$('caught'), stopwatchEl=$('stopwatch'), warnEl=$('warn');
+  const hud=$('hud');
+
+  toggleHud.addEventListener('click', ()=>{
+    hud.classList.toggle('min');
+  });
+
+  const STATE={IDLE:'idle', COUNTDOWN:'countdown', RUNNING:'running', CAUGHT:'caught'};
+  const Game={
+    state:STATE.IDLE, 
+    tickMs:CONFIG.game.tickMs, 
+    hideSeconds:CONFIG.game.hideSeconds, 
+    timer:null, 
+    watcher:null,
+    startedAt:null, 
+    stopwatchTimer:null, 
+    shrunk:false, 
+    shrinkTimeSec:CONFIG.boundary.shrinkTimeSeconds,
+    spawnGhostInterval: CONFIG.game.spawnGhostIntervalSeconds,
+    lastGhostSpawn: null,
+    maxGhosts: CONFIG.game.maxGhosts
+  };
+
+  // Geometri
+  let boundaryPoly=null; // Turf (Polygon/MultiPolygon)
+  let boundaryIsCircle=false; // spesiell håndtering (radius/center)
+  let boundaryCircleCenter=null, boundaryCircleRadiusM=CONFIG.boundary.defaultRadiusMeters;
+  let originalBoundaryGeom=null; // for krymp-logikk
+
+  let obstaclesPolys=[];   // Turf Polygon/MultiPolygon
+
+  // Spiller
+  let playerLatLng=null;
+
+  // Spøkelser
+  const ghosts=[];
+
+  // --- Turf helpers ---
+  const tPoint = (ll)=>turf.point([ll.lng, ll.lat]);
+  const metersBetween=(a,b)=>turf.distance(tPoint(a), tPoint(b), {units:'kilometers'})*1000;
+  const bearingTo=(from,to)=>turf.bearing([from.lng,from.lat],[to.lng,to.lat]);
+  const moveFrom=(ll, bearingDeg, meters)=>{
+    const d=turf.destination([ll.lng,ll.lat], meters/1000, bearingDeg, {units:'kilometers'});
+    const [lng,lat]=d.geometry.coordinates; return {lat, lng};
+  };
+  const pointInside=(poly,ll)=>turf.booleanPointInPolygon([ll.lng,ll.lat], poly);
+  const lineWithin=(poly,a,b)=>{
+    const line=turf.lineString([[a.lng,a.lat],[b.lng,b.lat]]);
+    try { return turf.booleanContains(poly, line); } catch(e){ return false; }
+  };
+  const lineIntersectsAnyObstacle=(a,b)=>{
+    if (!obstaclesPolys.length) return false;
+    const line = turf.lineString([[a.lng,a.lat], [b.lng,b.lat]]);
+    const bufferedLine = turf.buffer(line, 0.001, {units: 'kilometers'}); // ~1m buffer
+    for (const poly of obstaclesPolys) {
+      try {
+        if (turf.booleanIntersects(bufferedLine, poly)) return true;
+      } catch(e){
+        return true;
+      }
+    }
+    return false;
+  };
+  const pointInsideAnyObstacle=(ll)=>{
+    if (!obstaclesPolys.length) return false;
+    const pt=[ll.lng, ll.lat];
+    for (const poly of obstaclesPolys){
+      try { if (turf.booleanPointInPolygon(pt, poly)) return true; } catch(e){}
+    }
+    return false;
+  };
+  function setStatus(msg){ statusEl.textContent=msg; }
+  function flashWarn(msg){
+    warnEl.textContent = msg;
+    warnEl.style.display = 'block';
+    clearTimeout(flashWarn._t);
+    flashWarn._t = setTimeout(()=> warnEl.style.display='none', 1200);
+  }
+
+  // --- Boundary ---
+  function drawBoundary(poly){
+    boundarySourceData.features = [];
+    if (poly) {
+      const geom = poly.geometry ? poly.geometry : poly;
+      if (geom) {
+        boundarySourceData.features.push({ type: 'Feature', properties: { kind: 'boundary' }, geometry: geom });
+      }
+    }
+    refreshSource('boundary', boundarySourceData);
+  }
+  function setBoundary(poly, isCircle=false){
+    boundaryPoly=poly;
+    boundaryIsCircle=isCircle;
+    originalBoundaryGeom = turf.clone(poly);
+    drawBoundary(poly);
+    try { 
+      const center = turf.center(boundaryPoly);
+      map.setCenter([center.geometry.coordinates[0], center.geometry.coordinates[1]]);
+      map.setZoom(CONFIG.map.defaultZoom);
+    } catch (e){}
+  }
+  function ensureDefaultBoundary(center){
+    const c=center||map.getCenter();
+    const llCenter = { lat: c.lat, lng: c.lng };
+    boundaryCircleCenter = llCenter;
+    boundaryCircleRadiusM = CONFIG.boundary.defaultRadiusMeters;
+    const circle=turf.circle([llCenter.lng,llCenter.lat], boundaryCircleRadiusM/1000, {units:'kilometers',steps:CONFIG.turf.circleSteps});
+    setBoundary(circle, true);
+  }
+  function shrinkBoundaryTo80(){
+    if (Game.shrunk || !boundaryPoly) return;
+    Game.shrunk = true;
+
+    if (boundaryIsCircle && boundaryCircleCenter){
+      boundaryCircleRadiusM = boundaryCircleRadiusM * CONFIG.boundary.shrinkFactor;
+      const circle=turf.circle([boundaryCircleCenter.lng,boundaryCircleCenter.lat], boundaryCircleRadiusM/1000, {units:'kilometers',steps:CONFIG.turf.circleSteps});
+      boundaryPoly = circle;
+      drawBoundary(circle);
+
+      for (const ghost of ghosts) {
+        if (!pointInside(boundaryPoly, ghost.latlng)) {
+          const bearing = bearingTo(boundaryCircleCenter, ghost.latlng);
+          const safeDistance = boundaryCircleRadiusM * 0.8;
+          const newPos = moveFrom(boundaryCircleCenter, bearing, safeDistance);
+          ghost.updatePosition(newPos);
+        }
+      }
+      setStatus('Område krympet til 80% av størrelsen. Spøkelser flyttet innfor nytt område.');
+      return;
+    }
+
+    const scale = Math.sqrt(CONFIG.boundary.shrinkFactor);
+    const centroid = turf.centroid(boundaryPoly).geometry.coordinates;
+    function scaleCoords(coords){
+      return coords.map(ring => ring.map(([lng,lat])=>{
+        const dx = lng - centroid[0], dy = lat - centroid[1];
+        return [centroid[0] + dx*scale, centroid[1] + dy*scale];
+      }));
+    }
+    let newPoly=null;
+    if (boundaryPoly.type==='Feature' && boundaryPoly.geometry){
+      const g=boundaryPoly.geometry;
+      if (g.type==='Polygon') newPoly = turf.polygon(scaleCoords(g.coordinates));
+      else if (g.type==='MultiPolygon') newPoly = turf.multiPolygon(g.coordinates.map(scaleCoords));
+    } else if (boundaryPoly.type==='Polygon'){
+      newPoly = turf.polygon(scaleCoords(boundaryPoly.coordinates));
+    } else if (boundaryPoly.type==='MultiPolygon'){
+      newPoly = turf.multiPolygon(boundaryPoly.coordinates.map(scaleCoords));
+    }
+    if (newPoly){
+      boundaryPoly = newPoly;
+      drawBoundary(newPoly);
+
+      const center = turf.centroid(newPoly).geometry.coordinates;
+      const centerLL = { lat: center[1], lng: center[0] };
+      
+      for (const ghost of ghosts) {
+        if (!pointInside(boundaryPoly, ghost.latlng)) {
+          const bearing = bearingTo(centerLL, ghost.latlng);
+          const maxDist = 100; // meters
+          let newPos = null;
+          for (let dist = maxDist; dist >= 10; dist -= 5) {
+            const tryPos = moveFrom(centerLL, bearing, dist);
+            if (pointInside(boundaryPoly, tryPos) && !pointInsideAnyObstacle(tryPos)) {
+              newPos = tryPos;
+              break;
+            }
+          }
+          if (newPos) {
+            ghost.updatePosition(newPos);
+          }
+        }
+      }
+      setStatus('Område krympet til 80% av størrelsen. Spøkelser flyttet innfor nytt område.');
+    }
+  }
+
+  // --- Filinnlasting ---
+  function readGeoJSONFile(file, onJSON){
+    const r=new FileReader();
+    r.onload=()=>{ try{ onJSON(JSON.parse(r.result)); } catch(e){ alert('Ugyldig GeoJSON: '+e.message); } };
+    r.readAsText(file);
+  }
+  fileBoundary.addEventListener('change',(e)=>{
+    const f=e.target.files && e.target.files[0]; if (!f) return;
+    readGeoJSONFile(f, (gj)=>{
+      let poly=null;
+      if (gj.type==='FeatureCollection'){
+        for(const ft of gj.features){
+          if (!ft.geometry) continue;
+          if (ft.geometry.type==='Polygon'){ poly=turf.polygon(ft.geometry.coordinates); break; }
+          if (ft.geometry.type==='MultiPolygon'){ poly=turf.multiPolygon(ft.geometry.coordinates); break; }
+        }
+      } else if (gj.type==='Feature' && gj.geometry){
+        if (gj.geometry.type==='Polygon') poly=turf.polygon(gj.geometry.coordinates);
+        if (gj.geometry.type==='MultiPolygon') poly=turf.multiPolygon(gj.geometry.coordinates);
+      } else if (gj.type==='Polygon' || gj.type==='MultiPolygon'){
+        poly = gj.type==='Polygon' ? turf.polygon(gj.coordinates) : turf.multiPolygon(gj.coordinates);
+      }
+      if (!poly){ alert('Fant ingen polygon i avgrensningsfilen.'); return; }
+      setBoundary(poly, false);
+      setStatus('Avgrensning lastet ✔️');
+    });
+  });
+
+
+  // --- Spiller & posisjonsvalidering ---
+  function canMove(fromLL, toLL){
+    if (!boundaryPoly) return true;
+    if (!pointInside(boundaryPoly, toLL)) return false;
+    if (fromLL){
+      if (!lineWithin(boundaryPoly, fromLL, toLL)) return false;
+    }
+    return true;
+  }
+
+  function updatePlayerFeatures(ll, acc){
+    const features=[];
+    if (ll){
+      if (acc){
+        const accCircle = turf.circle([ll.lng,ll.lat], (acc||CONFIG.player.defaultAccuracyMeters)/1000, {units:'kilometers', steps:CONFIG.turf.circleSteps});
+        features.push({ type:'Feature', properties:{kind:'accuracy'}, geometry: accCircle.geometry });
+      }
+      features.push({ type:'Feature', properties:{kind:'player'}, geometry:{ type:'Point', coordinates:[ll.lng, ll.lat] }});
+    }
+    playerSourceData.features = features;
+    refreshSource('player', playerSourceData);
+  }
+
+  function ensurePlayer(ll, acc){
+    if (playerLatLng && !canMove(playerLatLng, ll)){
+      flashWarn('Ugyldig bevegelse (utenfor område).');
+      return;
+    }
+    if (!playerLatLng && boundaryPoly && !pointInside(boundaryPoly, ll)){
+      flashWarn('Utenfor område.');
+      return;
+    }
+    playerLatLng=ll;
+    updatePlayerFeatures(ll, acc||CONFIG.player.defaultAccuracyMeters);
+  }
+
+  if ("geolocation" in navigator){
+    Game.watcher=navigator.geolocation.watchPosition(pos=>{
+      const {latitude:lat, longitude:lng, accuracy}=pos.coords;
+      const ll={lat,lng};
+      if (!boundaryPoly) ensureDefaultBoundary(ll);
+      const before = playerLatLng;
+      ensurePlayer(ll, accuracy||10);
+      if (!playerLatLng && before){ /* do nothing */ }
+    }, _err=>{
+      setStatus('GPS avvist/feil. Trykk i kartet for å sette posisjon.');
+      if (!boundaryPoly) ensureDefaultBoundary(map.getCenter());
+    }, {enableHighAccuracy:true, maximumAge:2000, timeout:8000});
+  } else {
+    setStatus('Ingen geolokasjon. Trykk i kartet for å sette posisjon.');
+    ensureDefaultBoundary(map.getCenter());
+  }
+
+  // --- Spøkelse ---
+  function ghostConePolygon(points){
+    const coords = points.map(p => [p.lng, p.lat]);
+    if (coords.length) coords.push(coords[0]);
+    return { type:'Polygon', coordinates:[coords] };
+  }
+
+  function refreshGhostSource(){
+    refreshSource('ghosts', ghostSourceData);
+  }
+
+  class Ghost{
+    constructor(ll, opts){
+      this.id=`ghost-${Date.now()}-${Math.random().toString(16).slice(2,6)}`;
+      this.latlng=ll;
+      this.heading=Math.random()*360;
+      this.speed=opts.speed||CONFIG.ghost.defaultSpeed;
+      this.fov=opts.fov||CONFIG.ghost.defaultFOV;
+      this.viewDist=opts.viewDist||CONFIG.ghost.defaultViewDistance;
+      this.proximity=opts.proximity||CONFIG.ghost.defaultProximity;
+      this.mode='patrol';
+      this.lastSeenTarget=null;
+      this.searchUntil=0;
+      this.patrolTarget=this.pickPatrolTarget();
+      this.patrolRecalcAt=Date.now()+CONFIG.ghost.patrolRecalcMinMs+Math.random()*(CONFIG.ghost.patrolRecalcMaxMs-CONFIG.ghost.patrolRecalcMinMs);
+
+      this.markerFeature={
+        type:'Feature',
+        properties:{kind:'ghost', id:this.id},
+        geometry:{ type:'Point', coordinates:[ll.lng, ll.lat] }
+      };
+      const coneGeom = ghostConePolygon(this.computeCone());
+      this.coneFeature={
+        type:'Feature',
+        properties:{kind:'cone', id:`cone-${this.id}`},
+        geometry: coneGeom
+      };
+      ghostSourceData.features.push(this.markerFeature, this.coneFeature);
+      refreshGhostSource();
+    }
+    pickPatrolTarget(){
+      if (!boundaryPoly) return null;
+      const bb=turf.bbox(boundaryPoly);
+      for(let tries=0; tries<60; tries++){
+        const rnd=turf.randomPoint(1,{bbox:bb}).features[0];
+        if (!turf.booleanPointInPolygon(rnd, boundaryPoly)) continue;
+        const [lng,lat]=rnd.geometry.coordinates;
+        const ll={lat,lng};
+        if (pointInsideAnyObstacle(ll)) continue;
+        return ll;
+      }
+      const c=turf.centroid(boundaryPoly).geometry.coordinates;
+      return {lat:c[1], lng:c[0]};
+    }
+    computeCone(){
+      const normalizedHeading = ((this.heading % 360) + 360) % 360;
+      const leftAngle = normalizedHeading - this.fov/2;
+      const rightAngle = normalizedHeading + this.fov/2;
+      const points = [this.latlng];
+      const segments = 8;
+      for (let i = 0; i <= segments; i++) {
+        const angle = leftAngle + (rightAngle - leftAngle) * (i / segments);
+        points.push(moveFrom(this.latlng, angle, this.viewDist));
+      }
+      return points;
+    }
+    updateFeatures(){
+      this.markerFeature.geometry.coordinates = [this.latlng.lng, this.latlng.lat];
+      this.coneFeature.geometry = ghostConePolygon(this.computeCone());
+      refreshGhostSource();
+    }
+    updatePosition(ll){
+      this.latlng = ll;
+      this.updateFeatures();
+    }
+    seesPlayer(playerLL){
+      if (!playerLL) return false;
+      const distance = metersBetween(this.latlng, playerLL);
+      if (distance <= this.proximity) return true;
+      if (distance > this.viewDist) return false;
+      const bearing = bearingTo(this.latlng, playerLL);
+      const normalizedHeading = ((this.heading % 360) + 360) % 360;
+      const normalizedBearing = ((bearing % 360) + 360) % 360;
+      let angleDiff = Math.abs(normalizedBearing - normalizedHeading);
+      if (angleDiff > 180) angleDiff = 360 - angleDiff;
+      const halfFOV = this.fov / 2;
+      if (angleDiff > halfFOV) return false;
+      if (lineIntersectsAnyObstacle(this.latlng, playerLL)) return false;
+      if (boundaryPoly && !lineWithin(boundaryPoly, this.latlng, playerLL)) return false;
+      return true;
+    }
+    steer(dt, playerLL, allGhosts){
+      const now=Date.now();
+      const sees=this.seesPlayer(playerLL);
+      if (sees){
+        const snapshot={lat:playerLL.lat, lng:playerLL.lng};
+        this.mode='chase';
+        this.lastSeenTarget=snapshot;
+        this.searchUntil=now+CONFIG.ghost.searchDurationMs;
+      } else if (this.mode==='chase' && this.lastSeenTarget){
+        this.mode='search';
+      } else if (this.mode==='search' && (!this.lastSeenTarget || now>this.searchUntil)){
+        this.mode='patrol';
+        this.lastSeenTarget=null;
+        this.searchUntil=0;
+        if (!this.patrolTarget) this.patrolTarget=this.pickPatrolTarget();
+      }
+
+      const clampHeadingDiff=(current, desired, maxTurn)=>{
+        const diff=((((desired-current)%360)+540)%360)-180;
+        if (Math.abs(diff)<=maxTurn) return current+diff;
+        return current+(diff>0?maxTurn:-maxTurn);
+      };
+
+      let desiredHeading=this.heading;
+      let moveSpeed=this.speed;
+
+      if (this.mode==='chase' && playerLL){
+        desiredHeading=bearingTo(this.latlng, playerLL);
+        this.heading=clampHeadingDiff(this.heading, desiredHeading, CONFIG.ghost.chaseMaxTurnRate*dt);
+      } else if (this.mode==='search' && this.lastSeenTarget){
+        desiredHeading=bearingTo(this.latlng, this.lastSeenTarget);
+        const sweep=Math.sin(now/500)*35;
+        desiredHeading=(desiredHeading+sweep+360)%360;
+        moveSpeed=this.speed*CONFIG.ghost.searchSpeedFactor;
+        this.heading=clampHeadingDiff(this.heading, desiredHeading, CONFIG.ghost.searchMaxTurnRate*dt);
+        if (metersBetween(this.latlng, this.lastSeenTarget)<8){
+          this.mode='patrol';
+          this.lastSeenTarget=null;
+          this.searchUntil=0;
+          this.patrolTarget=this.pickPatrolTarget();
+          this.patrolRecalcAt=now+CONFIG.ghost.patrolRecalcMinMs+Math.random()*(CONFIG.ghost.patrolRecalcMaxMs-CONFIG.ghost.patrolRecalcMinMs);
+        }
+      } else {
+        if (!this.patrolTarget || !pointInside(boundaryPoly, this.patrolTarget) || metersBetween(this.latlng, this.patrolTarget)<8 || now>this.patrolRecalcAt){
+          this.patrolTarget=this.pickPatrolTarget();
+          this.patrolRecalcAt=now+CONFIG.ghost.patrolRecalcMinMs+Math.random()*(CONFIG.ghost.patrolRecalcMaxMs-CONFIG.ghost.patrolRecalcMinMs);
+        }
+        if (this.patrolTarget){
+          desiredHeading=bearingTo(this.latlng, this.patrolTarget);
+        }
+        this.heading=clampHeadingDiff(this.heading, desiredHeading, CONFIG.ghost.patrolMaxTurnRate*dt);
+        const probe=moveFrom(this.latlng, this.heading, this.speed*dt*2);
+        if (boundaryPoly && (!pointInside(boundaryPoly, probe) || !lineWithin(boundaryPoly, this.latlng, probe))){
+          this.patrolTarget=this.pickPatrolTarget();
+        }
+      }
+
+      this.heading=((this.heading%360)+360)%360;
+
+      if (Array.isArray(allGhosts) && allGhosts.length>1){
+        let vx=0, vy=0;
+        for(const other of allGhosts){
+          if (other===this || !other.latlng) continue;
+          const dist=metersBetween(this.latlng, other.latlng);
+          if (!dist || dist>CONFIG.ghost.separationDistance) continue;
+          const away=bearingTo(other.latlng, this.latlng);
+          const strength=(CONFIG.ghost.separationDistance-dist)/CONFIG.ghost.separationDistance;
+          const rad=away*Math.PI/180;
+          vx+=Math.cos(rad)*strength;
+          vy+=Math.sin(rad)*strength;
+        }
+        if (vx || vy){
+          const sep=(Math.atan2(vy, vx)*180/Math.PI+360)%360;
+          const diff=((((sep-this.heading)%360)+540)%360)-180;
+          const adjust=Math.max(-25, Math.min(25, diff*0.4));
+          this.heading=(this.heading+adjust+360)%360;
+        }
+      }
+
+      const step=moveSpeed*dt;
+      let next=moveFrom(this.latlng, this.heading, step);
+      const validMove=(from,to)=>{
+        if (boundaryPoly){
+          if (!pointInside(boundaryPoly,to)) return false;
+          if (!lineWithin(boundaryPoly, from, to)) return false;
+        }
+        return true;
+      };
+      if (!validMove(this.latlng, next)){
+        const offsets=[30,-30,60,-60,90,-90,120,-120,150,-150,180];
+        let fixed=null;
+        for(const off of offsets){
+          const h=(this.heading+off+360)%360;
+          const tryPos=moveFrom(this.latlng, h, step);
+          if (validMove(this.latlng, tryPos)){ fixed={h,tryPos}; break; }
+        }
+        if (fixed){ this.heading=fixed.h; next=fixed.tryPos; }
+        else {
+          next=this.latlng;
+          this.heading=(this.heading+180)%360;
+          this.patrolTarget=this.pickPatrolTarget();
+        }
+      }
+      this.latlng=next;
+      this.updateFeatures();
+    }
+  }
+
+  // --- Spillkontroll ---
+  function clearGhosts(){
+    ghosts.splice(0,ghosts.length);
+    ghostSourceData.features = [];
+    refreshGhostSource();
+  }
+
+  function startStopwatch(){
+    Game.startedAt = Date.now();
+    Game.shrunk = false;
+    stopwatchEl.style.display='block';
+    const update = ()=>{
+      const ms = Date.now() - Game.startedAt;
+      const s = Math.floor(ms/1000);
+      const m = Math.floor(s/60);
+      const ss = (s%60).toString().padStart(2,'0');
+      stopwatchEl.textContent = `⏱️ ${m}:${ss}`;
+      const shrinkTime = Game.shrinkTimeSec || 120;
+      if (!Game.shrunk && s >= shrinkTime) {
+        shrinkBoundaryTo80();
+        if (playerLatLng && !pointInside(boundaryPoly, playerLatLng)) {
+          flashWarn('Området krympet! Du var utenfor – flyt tilbake.');
+          let centerLL;
+          if (boundaryIsCircle && boundaryCircleCenter) centerLL = boundaryCircleCenter;
+          else {
+            const c = turf.centroid(boundaryPoly).geometry.coordinates;
+            centerLL = {lat:c[1], lng:c[0]};
+          }
+          const br = bearingTo(playerLatLng, centerLL);
+          const step = 3;
+          let tmp = playerLatLng;
+          for (let i = 0; i < 60 && !pointInside(boundaryPoly, tmp); i++) {
+            tmp = moveFrom(tmp, br, step);
+          }
+          if (
+            !pointInsideAnyObstacle(tmp) &&
+            lineWithin(boundaryPoly, playerLatLng, tmp) &&
+            !lineIntersectsAnyObstacle(playerLatLng, tmp)
+          ) {
+            ensurePlayer(tmp, null);
+          }
+        }
+      }
+    };
+    if (Game.stopwatchTimer) clearInterval(Game.stopwatchTimer);
+    Game.stopwatchTimer = setInterval(update, 300);
+    update();
+  }
+  function stopStopwatch(){
+    if (Game.stopwatchTimer){ clearInterval(Game.stopwatchTimer); Game.stopwatchTimer=null; }
+    stopwatchEl.style.display='none';
+  }
+
+  function spawnGhost(options) {
+    logger.debug('is boundaryPoly defined?', !!boundaryPoly);
+    if (!boundaryPoly) return null;
+    const bb = turf.bbox(boundaryPoly);
+    let tries = 0;
+    while (tries < 1000) {
+        tries++;
+        const rnd = turf.randomPoint(1, { bbox: bb }).features[0];
+        if (!turf.booleanPointInPolygon(rnd, boundaryPoly)) continue;
+        const [lng, lat] = rnd.geometry.coordinates;
+        const p = {lat, lng};
+        if (playerLatLng && metersBetween(p, playerLatLng) < CONFIG.player.minSpawnDistanceFromGhost) continue;
+        if (pointInsideAnyObstacle(p)) continue;
+        return new Ghost(p, options);
+    }
+    logger.warn('Failed to spawn ghost after 1000 tries.');
+    return null;
+  }
+
+  // Wake Lock variable
+  let wakeLock = null;
+
+  async function requestWakeLock() {
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+    } catch (err) {
+      logger.warn(`Failed to get Wake Lock: ${err.name}, ${err.message}`);
+    }
+  }
+
+  function releaseWakeLock() {
+    if (wakeLock !== null) {
+      wakeLock.release()
+        .then(() => {
+          wakeLock = null;
+        })
+        .catch((err) => {
+          console.error(`Failed to release Wake Lock: ${err.name}, ${err.message}`);
+        });
+    }
+  }
+
+  function startGame(){
+    if (!playerLatLng){ alert('Sett spillerposisjon (GPS eller trykk i kartet).'); return; }
+    if (!boundaryPoly) {
+      ensureDefaultBoundary(playerLatLng);
+    }
+    clearGhosts();
+    requestWakeLock();
+    caughtEl.style.display='none';
+
+    const n=Math.max(1, Math.min(100, Number(inputGhosts.value||CONFIG.ghost.defaultCount)));
+    const speed=Number(inputSpeed.value||CONFIG.ghost.defaultSpeed);
+    const fov=Number(inputFov.value||CONFIG.ghost.defaultFOV);
+    const viewDist=Number(inputViewDist.value||CONFIG.ghost.defaultViewDistance);
+    const prox=Number(inputProx.value||CONFIG.ghost.defaultProximity);
+
+    const bb=turf.bbox(boundaryPoly);
+    let created=0, safety=0;
+    while(created<n && safety<2000){
+      safety++;
+      const rnd=turf.randomPoint(1,{bbox:bb}).features[0];
+      if (!turf.booleanPointInPolygon(rnd, boundaryPoly)) continue;
+      const [lng,lat]=rnd.geometry.coordinates;
+      const p={lat,lng};
+      if (pointInsideAnyObstacle(p)) continue;
+      ghosts.push(new Ghost(p, {speed,fov,viewDist,proximity:prox}));
+      created++;
+    }
+
+    setStatus(`Spøkelser klare: ${ghosts.length}. Gjem deg nå!`);
+    drawBoundary(boundaryPoly);
+
+    Game.state=STATE.COUNTDOWN;
+    Game.lastGhostSpawn = null;
+    countdownEl.style.display='block';
+    const startTime = Date.now();
+    const countdownUpdate = () => {
+      const elapsedSec = Math.floor((Date.now() - startTime) / 1000);
+      const remaining = Game.hideSeconds - elapsedSec;
+      if (remaining <= 0) {
+        clearInterval(timer);
+        countdownEl.style.display = 'none';
+        runLoop();
+      } else {
+        countdownEl.textContent = remaining;
+      }
+    };
+    countdownUpdate();
+    const timer = setInterval(countdownUpdate, 1000);
+  }
+
+  function runLoop(){
+    Game.state=STATE.RUNNING;
+    if (Game.timer) clearInterval(Game.timer);
+    Game.timer=setInterval(()=>tick(Game.tickMs/1000), Game.tickMs);
+    setStatus('Spillet er i gang! Hold deg unna spøkelser.');
+    startStopwatch();
+  }
+
+  function tick(dt){
+    if (Game.state!==STATE.RUNNING || !playerLatLng) return;
+    const now = Date.now();
+    logger.debug(`Time since last ghost spawn: ${Game.lastGhostSpawn ? (now - Game.lastGhostSpawn) / 1000 : 'N/A'} seconds`);
+    if (Game.lastGhostSpawn === null) {
+      Game.lastGhostSpawn = now;
+    } else if (ghosts.length < Game.maxGhosts && 
+               (now - Game.lastGhostSpawn) / 1000 >= Game.spawnGhostInterval) {
+      const speed = Number(inputSpeed.value || CONFIG.ghost.defaultSpeed);
+      const fov = Number(inputFov.value || CONFIG.ghost.defaultFOV);
+      const viewDist = Number(inputViewDist.value || CONFIG.ghost.defaultViewDistance);
+      const prox = Number(inputProx.value || CONFIG.ghost.defaultProximity);
+      logger.debug('parameters for new ghost:', { speed, fov, viewDist, prox });
+      const newGhost = spawnGhost({ speed, fov, viewDist, proximity: prox });
+      logger.debug(`Spawning new ghost: ${newGhost ? 'Success' : 'Failed'}`);
+      if (newGhost) {
+        logger.info(`New ghost spawned at lat: ${newGhost.latlng.lat}, lng: ${newGhost.latlng.lng}`);
+        ghosts.push(newGhost);
+        Game.lastGhostSpawn = now;
+        setStatus(`Et nytt spøkelse har dukket opp! (${ghosts.length}/${Game.maxGhosts})`);
+      }
+    }
+    let playerFound = false;
+    const tasks = [];
+    for(const g of ghosts){
+      const d = metersBetween(g.latlng, playerLatLng);
+      if (d <= g.proximity) {
+        playerFound = true;
+        break;
+      }
+      if (d <= g.viewDist) {
+        tasks.push(g);
+      }
+      g.steer(dt, playerLatLng, ghosts);
+    }
+    if (!playerFound && tasks.length > 0) {
+      for(const g of tasks){
+        if (g.seesPlayer(playerLatLng)){ 
+          playerFound = true;
+          break;
+        }
+      }
+    }
+    if (playerFound) {
+      gameOver();
+    }
+  }
+
+  function gameOver(){
+    Game.state=STATE.CAUGHT;
+    if (Game.timer){ clearInterval(Game.timer); Game.timer=null; }
+    stopStopwatch();
+    releaseWakeLock();
+    const timePlayedMs = Date.now() - Game.startedAt;
+    const timePlayedSec = Math.floor(timePlayedMs / 1000);
+    checkHighScore(timePlayedSec, ghosts.length).then(() => {
+      $('overlay').style.display='block';
+      caughtEl.style.display='block';
+      loadLeaderboard();
+      setStatus('Du ble funnet! Trykk Reset for ny runde.');
+    });
+  }
+
+  function resetGame(){
+    Game.state=STATE.IDLE;
+    if (Game.timer){ clearInterval(Game.timer); Game.timer=null; }
+    stopStopwatch();
+    countdownEl.style.display='none';
+    caughtEl.style.display='none';
+    $('overlay').style.display='none';
+    clearGhosts();
+    Game.shrunk=false;
+    Game.lastGhostSpawn=null;
+    releaseWakeLock();
+    setStatus('Klar for ny runde.');
+  }
+
+  // Knapper
+  btnStart.addEventListener('click', ()=>{
+    if (Game.state===STATE.RUNNING || Game.state===STATE.COUNTDOWN) return;
+    startGame();
+  });
+  btnReset.addEventListener('click', resetGame);
+  $('overlay').addEventListener('click', resetGame);
+  caughtEl.addEventListener('click', resetGame);
+
+  // Welcome modal handling
+  const welcomeModal = $('welcome-modal');
+  const welcomeStartBtn = $('welcome-start');
+  welcomeStartBtn.addEventListener('click', () => {
+    welcomeModal.style.display = 'none';
+    localStorage.setItem('hasSeenWelcome', 'true');
+  });
+
+  // Init status
+  setStatus('Klar til start!');
+})();
+
+// ==================== PWA Install Logic ====================
+(function() {
+  let deferredPrompt;
+  const installBtn = document.getElementById('installBtn');
+  const installModal = document.getElementById('installModal');
+  const installModalOverlay = document.getElementById('installModalOverlay');
+  const confirmInstall = document.getElementById('confirmInstall');
+  const cancelInstall = document.getElementById('cancelInstall');
+
+  // Register Service Worker
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('../sw.js').then(registration => {
+        logger.info('Service Worker registered successfully:', registration);
+      }).catch(error => {
+        logger.error('Service Worker registration failed:', error);
+      });
+    });
+  }
+
+  // Listen for beforeinstallprompt event
+  window.addEventListener('beforeinstallprompt', (e) => {
+    // Prevent the mini-infobar from appearing on mobile
+    e.preventDefault();
+    // Store the event for later use
+    deferredPrompt = e;
+    // Show the install button
+    installBtn.classList.add('show');
+  });
+
+  // Listen for app installed event
+  window.addEventListener('appinstalled', () => {
+    logger.info('PWA was installed');
+    installBtn.classList.remove('show');
+    deferredPrompt = null;
+  });
+
+  // Install button click handler
+  installBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    if (!deferredPrompt) {
+      return;
+    }
+    // Show the install modal
+    showInstallModal();
+  });
+
+  // Confirm install
+  confirmInstall.addEventListener('click', () => {
+    if (!deferredPrompt) {
+      hideInstallModal();
+      return;
+    }
+    // Show the install prompt
+    deferredPrompt.prompt();
+    // Log the result
+    deferredPrompt.userChoice.then((choiceResult) => {
+      if (choiceResult.outcome === 'accepted') {
+        logger.info('User accepted the install prompt');
+      } else {
+        logger.info('User dismissed the install prompt');
+      }
+      deferredPrompt = null;
+      hideInstallModal();
+    });
+  });
+
+  // Cancel install
+  cancelInstall.addEventListener('click', () => {
+    hideInstallModal();
+  });
+
+  // Close modal when clicking overlay
+  installModalOverlay.addEventListener('click', () => {
+    hideInstallModal();
+  });
+
+  function showInstallModal() {
+    installModal.classList.add('show');
+    installModalOverlay.classList.add('show');
+  }
+
+  function hideInstallModal() {
+    installModal.classList.remove('show');
+    installModalOverlay.classList.remove('show');
+  }
+
+  // Check if app is already installed (for iOS)
+  if (window.navigator.standalone === true) {
+    installBtn.classList.remove('show');
+  }
+})();
+</script>
+</body>
+</html>

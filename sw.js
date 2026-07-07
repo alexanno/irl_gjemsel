@@ -1,11 +1,13 @@
 // Service Worker for IRL Gjemsel PWA
-const CACHE_NAME = 'irl-gjemsel-v1';
+const CACHE_NAME = 'irl-gjemsel-v2';
 const BASE_URL = self.registration.scope;
 const OFFLINE_FALLBACK = `${BASE_URL}index.html`;
 const urlsToCache = [
   BASE_URL,
   `${BASE_URL}index.html`,
-  `${BASE_URL}manifest.json`
+  `${BASE_URL}manifest.json`,
+  `${BASE_URL}v1/index.html`,
+  `${BASE_URL}v2/index.html`
 ];
 
 // Install event
